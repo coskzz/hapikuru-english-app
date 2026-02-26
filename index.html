@@ -8,16 +8,63 @@
 </head>
 <body>
 
-<!-- ホーム画面 -->
-<div id="screen-home" class="screen active">
-  <div class="home-header">
+<!-- ローディング -->
+<div id="screen-loading" class="screen active">
+  <div class="loading-content">
     <div class="logo">🌸 ハピクル英語塾</div>
-    <div class="subtitle">英検準1級 単語テスト</div>
+    <div class="loading-spinner"></div>
+  </div>
+</div>
+
+<!-- ログイン・新規登録 -->
+<div id="screen-login" class="screen">
+  <div class="auth-wrap">
+    <div class="auth-logo">
+      <div class="logo">🌸 ハピクル英語塾</div>
+      <div class="subtitle">英検準1級 単語テスト</div>
+    </div>
+
+    <!-- ログインフォーム -->
+    <div id="form-login" class="auth-form">
+      <h2 class="auth-title">ログイン</h2>
+      <input type="email" id="login-email" class="auth-input" placeholder="メールアドレス" autocomplete="email">
+      <input type="password" id="login-password" class="auth-input" placeholder="パスワード" autocomplete="current-password">
+      <div class="auth-error hidden" id="login-error"></div>
+      <button class="btn btn-primary btn-full" id="btn-login">ログイン</button>
+      <p class="auth-switch">アカウントをお持ちでない方は
+        <a href="#" id="show-signup">新規登録</a>
+      </p>
+    </div>
+
+    <!-- 新規登録フォーム -->
+    <div id="form-signup" class="auth-form hidden">
+      <h2 class="auth-title">新規登録</h2>
+      <input type="text" id="signup-name" class="auth-input" placeholder="お名前（例：田中 太郎）" autocomplete="name">
+      <input type="email" id="signup-email" class="auth-input" placeholder="メールアドレス" autocomplete="email">
+      <input type="password" id="signup-password" class="auth-input" placeholder="パスワード（6文字以上）" autocomplete="new-password">
+      <div class="auth-error hidden" id="signup-error"></div>
+      <button class="btn btn-primary btn-full" id="btn-signup">登録する</button>
+      <p class="auth-switch">すでにアカウントをお持ちの方は
+        <a href="#" id="show-login">ログイン</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ホーム画面 -->
+<div id="screen-home" class="screen">
+  <div class="home-header">
+    <div>
+      <div class="logo">🌸 ハピクル英語塾</div>
+      <div class="subtitle">英検準1級 単語テスト</div>
+    </div>
+    <div class="home-header-right">
+      <span class="user-name" id="home-username"></span>
+      <button id="btn-logout" class="btn btn-secondary btn-small">ログアウト</button>
+    </div>
   </div>
 
-  <div class="section-grid" id="section-grid">
-    <!-- JS で生成 -->
-  </div>
+  <div class="section-grid" id="section-grid"></div>
 
   <div class="home-footer">
     <button id="btn-review-all" class="btn btn-review">
@@ -29,7 +76,7 @@
   </div>
 </div>
 
-<!-- モード選択画面 -->
+<!-- モード選択 -->
 <div id="screen-mode" class="screen">
   <div class="mode-header">
     <button class="back-btn" id="btn-back-home">← 戻る</button>
@@ -37,12 +84,8 @@
   </div>
   <div class="mode-stats" id="mode-stats"></div>
   <div class="mode-buttons">
-    <button class="btn btn-primary btn-large" id="btn-start-normal">
-      ▶ テスト開始（全問）
-    </button>
-    <button class="btn btn-review btn-large" id="btn-start-review">
-      ⭐ バツのみ復習
-    </button>
+    <button class="btn btn-primary btn-large" id="btn-start-normal">▶ テスト開始（全問）</button>
+    <button class="btn btn-review btn-large" id="btn-start-review">⭐ バツのみ復習</button>
   </div>
 </div>
 
@@ -55,21 +98,15 @@
       <span id="quiz-mode-label"></span>
     </div>
   </div>
-
   <div class="progress-bar-wrap">
     <div class="progress-bar" id="progress-bar"></div>
   </div>
   <div class="progress-text" id="progress-text"></div>
-
   <div class="quiz-card">
     <div class="word-display" id="word-display"></div>
     <div class="word-no" id="word-no"></div>
   </div>
-
-  <div class="choices" id="choices">
-    <!-- 4択ボタン JS で生成 -->
-  </div>
-
+  <div class="choices" id="choices"></div>
   <div class="quiz-result hidden" id="quiz-result"></div>
 </div>
 
@@ -86,6 +123,34 @@
   </div>
 </div>
 
+<!-- 管理画面 -->
+<div id="screen-admin" class="screen">
+  <div class="admin-header">
+    <div>
+      <div class="logo">🌸 管理画面</div>
+      <div class="subtitle" id="admin-teacher-name"></div>
+    </div>
+    <button id="btn-admin-logout" class="btn btn-secondary btn-small">ログアウト</button>
+  </div>
+
+  <div class="admin-stats-bar" id="admin-stats-bar"></div>
+
+  <div class="admin-toolbar">
+    <input type="text" id="admin-search" class="admin-search" placeholder="生徒名で検索...">
+    <button class="btn btn-secondary btn-small" id="btn-admin-refresh">🔄 更新</button>
+  </div>
+
+  <div id="admin-table-wrap">
+    <p class="loading-text">データを読み込み中...</p>
+  </div>
+</div>
+
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script src="firebase-config.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>
