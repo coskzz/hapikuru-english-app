@@ -262,6 +262,23 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 .report-textarea:focus { border-color: #FF6B9D; }
 .report-char-count { font-size: .78rem; color: #aaa; text-align: right; margin: 4px 0 10px; }
 .report-char-count.valid { color: #3DBF73; font-weight: bold; }
+
+/* クイズ報告ラジオボタン */
+.report-radio-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.report-radio-label {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  border: 1.5px solid #ddd; border-radius: 12px;
+  cursor: pointer; font-size: .9rem; color: #555;
+  transition: border-color .15s, background .15s;
+}
+.report-radio-label:has(input:checked) {
+  border-color: #FF6B9D; background: #FFF0F6; color: #FF6B9D; font-weight: bold;
+}
+.report-radio-label input[type="radio"] {
+  accent-color: #FF6B9D; width: 16px; height: 16px; flex-shrink: 0;
+}
+
 .modal-footer { display: flex; gap: 8px; justify-content: flex-end; }
 .report-link-btn {
   background: none; border: none; color: #FFB3D1; font-size: .75rem;
@@ -358,6 +375,52 @@ body.has-tab-bar .screen { padding-bottom: 76px; }
 /* ===== Admin name link ===== */
 .col-name-link { cursor: pointer; }
 .col-name-link:hover strong { color: #FF6B9D; text-decoration: underline; }
+
+/* ===== Character Coach Widget ===== */
+.chara-widget {
+  position: fixed;
+  bottom: 20px; right: 12px;
+  z-index: 60;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  cursor: pointer;
+  animation: chara-float 3.5s ease-in-out infinite;
+}
+body.has-tab-bar .chara-widget { bottom: 76px; }
+
+@keyframes chara-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-7px); }
+}
+
+.chara-bubble {
+  background: #fff;
+  border: 2px solid #FF6B9D;
+  border-radius: 18px 18px 4px 18px;
+  padding: 8px 13px;
+  font-size: .78rem; font-weight: bold; color: #FF6B9D;
+  max-width: 130px; text-align: center; line-height: 1.4;
+  box-shadow: 0 3px 10px rgba(255,107,157,.18);
+  position: relative;
+  transition: opacity .2s;
+}
+.chara-bubble::after {
+  content: '';
+  position: absolute; bottom: -8px; right: 14px;
+  border: 5px solid transparent;
+  border-top-color: #FF6B9D;
+}
+
+.chara-img {
+  width: 80px; height: auto;
+  filter: drop-shadow(2px 4px 8px rgba(0,0,0,.12));
+  display: block;
+}
+
+.chara-widget.chara-bounce {
+  animation: none;
+  transform: scale(1.12);
+  transition: transform .15s;
+}
 
 /* ===== Responsive ===== */
 @media (max-width: 360px) {

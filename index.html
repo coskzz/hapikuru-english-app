@@ -199,11 +199,30 @@
       <button class="modal-close-btn" id="btn-close-report">✕</button>
     </div>
     <div id="report-context" class="report-context hidden"></div>
+
+    <!-- クイズ報告用ラジオボタン（クイズから開いた場合のみ表示） -->
+    <div id="report-quiz-options" class="report-radio-group hidden">
+      <label class="report-radio-label">
+        <input type="radio" name="quiz-report-type" value="word_error">
+        <span>❌ 単語・意味が間違っている</span>
+      </label>
+      <label class="report-radio-label">
+        <input type="radio" name="quiz-report-type" value="choices_error">
+        <span>🔢 選択肢に問題がある</span>
+      </label>
+      <label class="report-radio-label">
+        <input type="radio" name="quiz-report-type" value="other">
+        <span>💬 その他（詳細入力）</span>
+      </label>
+    </div>
+
+    <!-- 一般フィードバック用タイプボタン（マイページから開いた場合のみ表示） -->
     <div class="report-type-group" id="report-type-group">
       <button class="report-type-btn active" data-type="word_error">❌ 単語の誤り</button>
       <button class="report-type-btn" data-type="feature">💡 機能リクエスト</button>
       <button class="report-type-btn" data-type="other">💬 その他</button>
     </div>
+
     <textarea id="report-message" class="report-textarea"
       placeholder="具体的な内容を記入してください（20文字以上）" rows="4"></textarea>
     <div class="report-char-count" id="report-char-count">0文字（20文字以上必要）</div>
@@ -231,6 +250,12 @@
     </div>
     <div id="detail-body" class="detail-body"></div>
   </div>
+</div>
+
+<!-- キャラクターウィジェット（クイズ画面以外に表示） -->
+<div id="chara-widget" class="chara-widget hidden">
+  <div class="chara-bubble" id="chara-bubble"></div>
+  <img class="chara-img" id="chara-img" src="" alt="先生">
 </div>
 
 <!-- タブバー（教師専用） -->

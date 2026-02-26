@@ -39,7 +39,56 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
+  updateChara(id);
 }
+
+// ===== Character Coach =====
+const CHARA_CONFIG = {
+  'screen-home':     { pose: 'hello',  msgs: ['今日も頑張ろう！', 'コツコツ続けよう！', '英検合格まで一緒に！'] },
+  'screen-mode':     { pose: 'fight',  msgs: ['さあ挑戦だ！', '全力で行こう！', 'できるよ、信じてる！'] },
+  'screen-complete': { pose: 'cheer',  msgs: ['よく頑張った！', '素晴らしい！', 'その調子で続けよう！'] },
+  'screen-mypage':   { pose: 'study',  msgs: ['コツコツが大切！', '振り返りが力になるよ！', '継続は力なり！'] },
+};
+const CHARA_HIDDEN = new Set(['screen-quiz', 'screen-loading', 'screen-login', 'screen-admin']);
+
+function updateChara(screenId) {
+  const widget = document.getElementById('chara-widget');
+  if (CHARA_HIDDEN.has(screenId)) {
+    widget.classList.add('hidden');
+    return;
+  }
+  const cfg = CHARA_CONFIG[screenId];
+  if (!cfg) { widget.classList.add('hidden'); return; }
+
+  // 完了画面はスコアで使い分け
+  let pose = cfg.pose;
+  if (screenId === 'screen-complete') {
+    const total = quiz.sessionCorrect + quiz.sessionWrong;
+    const pct   = total > 0 ? quiz.sessionCorrect / total : 0;
+    pose = pct >= 0.8 ? 'cheer' : pct >= 0.5 ? 'teach' : 'think';
+  }
+
+  const msg = cfg.msgs[Math.floor(Math.random() * cfg.msgs.length)];
+  document.getElementById('chara-img').src    = `images/chara_${pose}.png`;
+  document.getElementById('chara-bubble').textContent = msg;
+  widget.classList.remove('hidden');
+}
+
+// キャラクタークリックで吹き出しメッセージを変える
+document.getElementById('chara-widget').addEventListener('click', () => {
+  const screenId = document.querySelector('.screen.active')?.id;
+  const cfg = CHARA_CONFIG[screenId];
+  if (!cfg) return;
+  const bubble = document.getElementById('chara-bubble');
+  const msgs = cfg.msgs;
+  const current = bubble.textContent;
+  const next = msgs[(msgs.indexOf(current) + 1) % msgs.length];
+  bubble.textContent = next;
+  // バウンスアニメ
+  const widget = document.getElementById('chara-widget');
+  widget.classList.add('chara-bounce');
+  setTimeout(() => widget.classList.remove('chara-bounce'), 400);
+});
 
 // ===== Tab Bar =====
 function showTabBar(visible) {
@@ -552,12 +601,33 @@ let reportContext = null;
 
 function openReport(context) {
   reportContext = context || null;
+  const isQuiz = reportContext !== null;
+
+  // Reset
   document.getElementById('report-message').value = '';
   document.getElementById('report-char-count').textContent = '0文字（20文字以上必要）';
   document.getElementById('report-char-count').className = 'report-char-count';
   document.getElementById('report-error').classList.add('hidden');
-  document.getElementById('btn-submit-report').disabled = true;
-  document.querySelectorAll('.report-type-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+
+  // Mode-specific UI
+  document.getElementById('report-quiz-options').classList.toggle('hidden', !isQuiz);
+  document.getElementById('report-type-group').classList.toggle('hidden', isQuiz);
+
+  if (isQuiz) {
+    // Quiz: radio — reset to first, hide textarea until "その他" is selected
+    document.querySelectorAll('input[name="quiz-report-type"]').forEach((r, i) => { r.checked = i === 0; });
+    document.getElementById('report-message').classList.add('hidden');
+    document.getElementById('report-char-count').classList.add('hidden');
+    document.getElementById('btn-submit-report').disabled = false;
+  } else {
+    // General: type buttons + textarea always visible
+    document.querySelectorAll('.report-type-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+    document.getElementById('report-message').classList.remove('hidden');
+    document.getElementById('report-char-count').classList.remove('hidden');
+    document.getElementById('btn-submit-report').disabled = true;
+    document.getElementById('report-message').focus();
+  }
+
   const ctxEl = document.getElementById('report-context');
   if (context) {
     ctxEl.textContent = `対象: No.${context.wordNo}  ${context.word} = ${context.japanese}`;
@@ -566,7 +636,6 @@ function openReport(context) {
     ctxEl.classList.add('hidden');
   }
   document.getElementById('report-modal').classList.remove('hidden');
-  document.getElementById('report-message').focus();
 }
 
 function closeReport() {
@@ -575,10 +644,21 @@ function closeReport() {
 }
 
 async function submitReport() {
-  const message = document.getElementById('report-message').value.trim();
-  if (message.length < 20) return;
-  const activeType = document.querySelector('.report-type-btn.active');
-  const type = activeType?.dataset.type || 'other';
+  const isQuiz = reportContext !== null;
+  let type, message;
+
+  if (isQuiz) {
+    const checked = document.querySelector('input[name="quiz-report-type"]:checked');
+    type = checked?.value || 'word_error';
+    message = type === 'other' ? document.getElementById('report-message').value.trim() : '';
+    if (type === 'other' && message.length < 20) return;
+  } else {
+    message = document.getElementById('report-message').value.trim();
+    if (message.length < 20) return;
+    const activeType = document.querySelector('.report-type-btn.active');
+    type = activeType?.dataset.type || 'other';
+  }
+
   const btn = document.getElementById('btn-submit-report');
   btn.textContent = '送信中...';
   btn.disabled = true;
@@ -604,6 +684,21 @@ async function submitReport() {
   }
 }
 
+// クイズラジオボタン切替：「その他」のときだけテキストエリアを表示
+document.getElementById('report-quiz-options').addEventListener('change', (e) => {
+  if (e.target.type !== 'radio') return;
+  const isOther = e.target.value === 'other';
+  document.getElementById('report-message').classList.toggle('hidden', !isOther);
+  document.getElementById('report-char-count').classList.toggle('hidden', !isOther);
+  if (isOther) {
+    const len = document.getElementById('report-message').value.trim().length;
+    document.getElementById('btn-submit-report').disabled = len < 20;
+    document.getElementById('report-message').focus();
+  } else {
+    document.getElementById('btn-submit-report').disabled = false;
+  }
+});
+
 document.getElementById('report-type-group').addEventListener('click', (e) => {
   const btn = e.target.closest('.report-type-btn');
   if (!btn) return;
@@ -616,7 +711,12 @@ document.getElementById('report-message').addEventListener('input', (e) => {
   const countEl = document.getElementById('report-char-count');
   countEl.textContent = len < 20 ? `${len}文字（20文字以上必要）` : `${len}文字 ✓`;
   countEl.className   = 'report-char-count' + (len >= 20 ? ' valid' : '');
-  document.getElementById('btn-submit-report').disabled = len < 20;
+  // クイズの「その他」モードでも汎用モードでも送信ボタンを制御
+  const isQuizOther = reportContext !== null &&
+    document.querySelector('input[name="quiz-report-type"]:checked')?.value === 'other';
+  if (reportContext === null || isQuizOther) {
+    document.getElementById('btn-submit-report').disabled = len < 20;
+  }
 });
 
 document.getElementById('report-modal').addEventListener('click', (e) => {
