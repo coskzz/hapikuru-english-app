@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ハピクル英語塾 単語テスト</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ホーム画面 -->
+<div id="screen-home" class="screen active">
+  <div class="home-header">
+    <div class="logo">🌸 ハピクル英語塾</div>
+    <div class="subtitle">英検準1級 単語テスト</div>
+  </div>
+
+  <div class="section-grid" id="section-grid">
+    <!-- JS で生成 -->
+  </div>
+
+  <div class="home-footer">
+    <button id="btn-review-all" class="btn btn-review">
+      ⭐ バツのみ復習モード
+    </button>
+    <button id="btn-reset" class="btn btn-secondary btn-small">
+      データリセット
+    </button>
+  </div>
+</div>
+
+<!-- モード選択画面 -->
+<div id="screen-mode" class="screen">
+  <div class="mode-header">
+    <button class="back-btn" id="btn-back-home">← 戻る</button>
+    <h2 id="mode-section-title"></h2>
+  </div>
+  <div class="mode-stats" id="mode-stats"></div>
+  <div class="mode-buttons">
+    <button class="btn btn-primary btn-large" id="btn-start-normal">
+      ▶ テスト開始（全問）
+    </button>
+    <button class="btn btn-review btn-large" id="btn-start-review">
+      ⭐ バツのみ復習
+    </button>
+  </div>
+</div>
+
+<!-- テスト画面 -->
+<div id="screen-quiz" class="screen">
+  <div class="quiz-header">
+    <button class="back-btn" id="btn-back-mode">← 戻る</button>
+    <div class="quiz-info">
+      <span id="quiz-section-label"></span>
+      <span id="quiz-mode-label"></span>
+    </div>
+  </div>
+
+  <div class="progress-bar-wrap">
+    <div class="progress-bar" id="progress-bar"></div>
+  </div>
+  <div class="progress-text" id="progress-text"></div>
+
+  <div class="quiz-card">
+    <div class="word-display" id="word-display"></div>
+    <div class="word-no" id="word-no"></div>
+  </div>
+
+  <div class="choices" id="choices">
+    <!-- 4択ボタン JS で生成 -->
+  </div>
+
+  <div class="quiz-result hidden" id="quiz-result"></div>
+</div>
+
+<!-- 完了画面 -->
+<div id="screen-complete" class="screen">
+  <div class="complete-content">
+    <div class="complete-icon">🎉</div>
+    <h2 id="complete-title"></h2>
+    <div class="complete-stats" id="complete-stats"></div>
+    <div class="complete-buttons">
+      <button class="btn btn-primary" id="btn-complete-retry">もう一度</button>
+      <button class="btn btn-secondary" id="btn-complete-home">ホームへ</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
