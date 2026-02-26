@@ -187,6 +187,24 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 .total-pct { font-size: 1rem; font-weight: bold; color: #FF6B9D; }
 .total-pct + small { color: #aaa; font-size: .75rem; }
 
+/* ===== TAB BAR (teacher only) ===== */
+.tab-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  display: flex; background: #fff;
+  border-top: 2px solid #FFE0EE; height: 60px; z-index: 100;
+}
+.tab-btn {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer;
+  color: #bbb; font-size: .72rem; padding: 6px 0;
+  transition: color .18s;
+}
+.tab-btn .tab-icon { font-size: 1.5rem; line-height: 1; }
+.tab-btn .tab-label { margin-top: 2px; }
+.tab-btn.active { color: #FF6B9D; }
+body.has-tab-bar .screen { padding-bottom: 76px; }
+
 /* ===== Responsive ===== */
 @media (max-width: 360px) {
   .word-display { font-size: 1.6rem; }

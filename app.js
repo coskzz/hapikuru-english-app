@@ -39,6 +39,23 @@ function showScreen(id) {
   window.scrollTo(0, 0);
 }
 
+// ===== Tab Bar =====
+function showTabBar(visible) {
+  const bar = document.getElementById('tab-bar');
+  if (visible) {
+    bar.classList.remove('hidden');
+    document.body.classList.add('has-tab-bar');
+  } else {
+    bar.classList.add('hidden');
+    document.body.classList.remove('has-tab-bar');
+  }
+}
+
+function setActiveTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
 // ===== Firestore =====
 async function loadUserData(uid) {
   const doc = await db.collection('users').doc(uid).get();
@@ -77,15 +94,21 @@ auth.onAuthStateChanged(async (user) => {
 
     if (userRole === 'teacher') {
       document.getElementById('admin-teacher-name').textContent = `講師: ${userName}`;
+      document.getElementById('home-username').textContent = userName;
+      showTabBar(true);
+      setActiveTab('admin');
+      renderHome();
       showScreen('screen-admin');
       loadAdminData();
     } else {
+      showTabBar(false);
       document.getElementById('home-username').textContent = userName;
       renderHome();
       showScreen('screen-home');
     }
   } else {
     currentUser = null;
+    showTabBar(false);
     showScreen('screen-login');
   }
 });
@@ -445,6 +468,18 @@ document.getElementById('btn-start-review').addEventListener('click', () => star
 document.getElementById('btn-complete-home').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
 document.getElementById('btn-complete-retry').addEventListener('click', () => startQuiz(quiz.mode));
 document.getElementById('btn-reset').addEventListener('click', resetState);
+
+// ===== Teacher Tab Bar Click =====
+document.getElementById('tab-admin').addEventListener('click', () => {
+  setActiveTab('admin');
+  showScreen('screen-admin');
+  loadAdminData();
+});
+document.getElementById('tab-student').addEventListener('click', () => {
+  setActiveTab('student');
+  renderHome();
+  showScreen('screen-home');
+});
 
 document.getElementById('btn-review-all').addEventListener('click', () => {
   const allWrong = WORDS.filter(w => w.japanese && (state.records[w.no]?.wrongCount || 0) > 0);
