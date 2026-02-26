@@ -215,6 +215,24 @@
   </div>
 </div>
 
+<!-- 生徒詳細モーダル（教師用） -->
+<div id="student-detail-modal" class="modal-overlay hidden">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title" id="detail-student-name"></h3>
+        <div class="modal-subtitle" id="detail-student-email"></div>
+      </div>
+      <button class="modal-close-btn" id="btn-close-detail">✕</button>
+    </div>
+    <div class="detail-tabs">
+      <button class="detail-tab-btn active" id="detail-tab-calendar" data-tab="calendar">📅 カレンダー</button>
+      <button class="detail-tab-btn" id="detail-tab-chart" data-tab="chart">📈 グラフ</button>
+    </div>
+    <div id="detail-body" class="detail-body"></div>
+  </div>
+</div>
+
 <!-- タブバー（教師専用） -->
 <div id="tab-bar" class="tab-bar hidden">
   <button class="tab-btn" id="tab-student" data-tab="student">

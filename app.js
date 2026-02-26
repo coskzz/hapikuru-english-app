@@ -25,7 +25,9 @@ const SECTIONS = [
 let currentUser  = null;
 let userRole     = 'student';
 let userName     = '';
-let state        = { records: {} };
+let state        = { records: {}, dailyLog: {} };
+let adminStudentsMap = {};
+let currentDetailUid = null;
 
 let quiz = {
   section: null, pool: [], allWords: [], mode: 'normal',
@@ -63,24 +65,29 @@ async function loadUserData(uid) {
     const d = doc.data();
     userRole  = d.role  || 'student';
     userName  = d.name  || currentUser.email;
-    state.records = d.records || {};
+    state.records  = d.records  || {};
+    state.dailyLog = d.dailyLog || {};
   } else {
     userRole = 'student';
-    state.records = {};
+    state.records  = {};
+    state.dailyLog = {};
   }
 }
 
 function saveState() {
   if (!currentUser) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const mastered = WORDS.filter(w => w.japanese && state.records[w.no]?.correct).length;
+  state.dailyLog[today] = { mastered };
   db.collection('users').doc(currentUser.uid).set(
-    { records: state.records, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+    { records: state.records, dailyLog: state.dailyLog, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
     { merge: true }
   ).catch(console.error);
 }
 
 function resetState() {
   if (!confirm('全学習データをリセットしますか？\nこの操作は元に戻せません。')) return;
-  state = { records: {} };
+  state = { records: {}, dailyLog: {} };
   saveState();
   renderHome();
 }
@@ -646,6 +653,9 @@ async function loadAdminData() {
       <div class="stat-item"><div class="stat-num">${students.filter(s => isCleared(s.records)).length}</div><div class="stat-label">全問制覇</div></div>
     `;
 
+    adminStudentsMap = {};
+    students.forEach(s => { adminStudentsMap[s.uid] = s; });
+
     renderAdminTable(students);
     setupAdminSearch(students);
   } catch (e) {
@@ -696,7 +706,7 @@ function renderAdminTable(students) {
     const updatedAt    = student.updatedAt?.toDate ? student.updatedAt.toDate().toLocaleDateString('ja-JP') : '—';
 
     html += `<tr>
-      <td class="col-name"><strong>${student.name || '—'}</strong><br><small>${student.email || ''}</small></td>
+      <td class="col-name col-name-link" onclick="openStudentDetail('${student.uid}')"><strong>${student.name || '—'}</strong><br><small>${student.email || ''}</small></td>
     `;
 
     SECTIONS.forEach(sec => {
@@ -724,6 +734,145 @@ function renderAdminTable(students) {
   wrap.innerHTML = html;
 }
 
+// ===== Student Detail Modal =====
+function openStudentDetail(uid) {
+  const student = adminStudentsMap[uid];
+  if (!student) return;
+  currentDetailUid = uid;
+
+  document.getElementById('detail-student-name').textContent = student.name || '—';
+  document.getElementById('detail-student-email').textContent = student.email || '';
+
+  // Reset to calendar tab
+  document.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('detail-tab-calendar').classList.add('active');
+
+  renderCalendarView(student.dailyLog || {}, document.getElementById('detail-body'));
+  document.getElementById('student-detail-modal').classList.remove('hidden');
+}
+
+function renderCalendarView(dailyLog, container) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const values = Object.values(dailyLog).map(d => d.mastered || 0);
+  const maxVal = values.length > 0 ? Math.max(...values) : 1;
+
+  // Go back 90 days then rewind to Sunday
+  const startDate = new Date(today);
+  startDate.setDate(today.getDate() - 90);
+  startDate.setDate(startDate.getDate() - startDate.getDay());
+
+  const NUM_WEEKS = 13;
+  const DAYS = ['日', '月', '火', '水', '木', '金', '土'];
+
+  // Build grid[week][day]
+  const grid = [];
+  for (let w = 0; w < NUM_WEEKS; w++) {
+    grid[w] = [];
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + w * 7 + d);
+      const dateStr = date.toISOString().slice(0, 10);
+      const mastered = dailyLog[dateStr]?.mastered || 0;
+      const isFuture = date > today;
+      let level = 0;
+      if (!isFuture && mastered > 0) {
+        level = Math.min(4, Math.ceil((mastered / maxVal) * 4));
+      }
+      grid[w][d] = { dateStr, mastered, isFuture, level };
+    }
+  }
+
+  // Month labels (show when month changes)
+  let lastMonth = -1;
+  const monthLabels = grid.map(week => {
+    const d = new Date(week[0].dateStr);
+    const m = d.getMonth();
+    if (m !== lastMonth) { lastMonth = m; return `${m + 1}月`; }
+    return '';
+  });
+
+  let html = '<div class="cal-wrap">';
+
+  // Month label row
+  html += '<div class="cal-month-row"><div class="cal-corner"></div>';
+  monthLabels.forEach(label => { html += `<div class="cal-month-cell">${label}</div>`; });
+  html += '</div>';
+
+  // Day rows
+  for (let d = 0; d < 7; d++) {
+    html += '<div class="cal-day-row">';
+    html += `<div class="cal-day-label">${d % 2 === 1 ? DAYS[d] : ''}</div>`;
+    for (let w = 0; w < NUM_WEEKS; w++) {
+      const cell = grid[w][d];
+      const cls = cell.isFuture ? 'cal-cell cal-future' : `cal-cell cal-lv${cell.level}`;
+      const title = cell.isFuture ? '' : `${cell.dateStr}: ${cell.mastered}語`;
+      html += `<div class="${cls}" title="${title}"></div>`;
+    }
+    html += '</div>';
+  }
+
+  // Legend
+  html += '<div class="cal-legend"><span class="cal-legend-label">少</span>';
+  for (let i = 0; i <= 4; i++) { html += `<div class="cal-cell cal-lv${i}"></div>`; }
+  html += '<span class="cal-legend-label">多</span></div>';
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderLineChart(dailyLog, container) {
+  let entries = Object.entries(dailyLog)
+    .filter(([, v]) => v && v.mastered !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b));
+
+  if (entries.length === 0) {
+    container.innerHTML = '<p class="detail-empty">学習データがありません。</p>';
+    return;
+  }
+  if (entries.length === 1) {
+    entries = [[entries[0][0], { mastered: 0 }], ...entries];
+  }
+
+  const W = 320, H = 180;
+  const PL = 44, PR = 12, PT = 12, PB = 32;
+
+  const values = entries.map(([, v]) => v.mastered || 0);
+  const maxY = Math.max(...values, 10);
+  const n = entries.length;
+
+  const xs = i => PL + (i / (n - 1)) * (W - PL - PR);
+  const ys = v => PT + (1 - v / maxY) * (H - PT - PB);
+
+  const linePoints = entries.map(([, v], i) => `${xs(i).toFixed(1)},${ys(v.mastered || 0).toFixed(1)}`).join(' ');
+
+  const areaPath = [
+    `M${xs(0).toFixed(1)},${ys(values[0]).toFixed(1)}`,
+    ...entries.slice(1).map(([, v], i) => `L${xs(i + 1).toFixed(1)},${ys(v.mastered || 0).toFixed(1)}`),
+    `L${xs(n - 1).toFixed(1)},${ys(0).toFixed(1)}`,
+    `L${xs(0).toFixed(1)},${ys(0).toFixed(1)} Z`,
+  ].join(' ');
+
+  const yTicks = [0, Math.round(maxY / 2), maxY];
+  const xIdxs = [...new Set([0, Math.floor(n / 2), n - 1])];
+
+  const svg = `<svg viewBox="0 0 ${W} ${H}" class="line-chart-svg" xmlns="http://www.w3.org/2000/svg">
+    <path d="${areaPath}" class="chart-area"/>
+    <polyline points="${linePoints}" class="chart-line" fill="none"/>
+    ${entries.map(([, v], i) => `<circle cx="${xs(i).toFixed(1)}" cy="${ys(v.mastered || 0).toFixed(1)}" r="3" class="chart-dot"/>`).join('')}
+    <line x1="${PL}" y1="${PT}" x2="${PL}" y2="${H - PB}" class="chart-axis"/>
+    <line x1="${PL}" y1="${H - PB}" x2="${W - PR}" y2="${H - PB}" class="chart-axis"/>
+    ${yTicks.map(v => `
+      <line x1="${PL - 4}" y1="${ys(v).toFixed(1)}" x2="${PL}" y2="${ys(v).toFixed(1)}" class="chart-tick"/>
+      <text x="${PL - 6}" y="${(ys(v) + 4).toFixed(1)}" class="chart-label" text-anchor="end">${v}</text>
+    `).join('')}
+    ${xIdxs.map(i => `<text x="${xs(i).toFixed(1)}" y="${H - PB + 14}" class="chart-label" text-anchor="middle">${entries[i][0].slice(5)}</text>`).join('')}
+  </svg>`;
+
+  container.innerHTML = `<div class="chart-wrap"><p class="chart-title">習得語数の推移</p>${svg}</div>`;
+}
+
 function setupAdminSearch(students) {
   document.getElementById('admin-search').addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
@@ -733,6 +882,28 @@ function setupAdminSearch(students) {
 }
 
 document.getElementById('btn-admin-refresh').addEventListener('click', loadAdminData);
+
+// Student detail modal events
+document.getElementById('btn-close-detail').addEventListener('click', () => {
+  document.getElementById('student-detail-modal').classList.add('hidden');
+  currentDetailUid = null;
+});
+document.querySelectorAll('.detail-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!currentDetailUid) return;
+    const student = adminStudentsMap[currentDetailUid];
+    if (!student) return;
+    document.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const body = document.getElementById('detail-body');
+    body.innerHTML = '';
+    if (btn.dataset.tab === 'calendar') {
+      renderCalendarView(student.dailyLog || {}, body);
+    } else {
+      renderLineChart(student.dailyLog || {}, body);
+    }
+  });
+});
 
 // ===== Navigation =====
 document.getElementById('btn-mypage').addEventListener('click', openMyPage);

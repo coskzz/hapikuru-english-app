@@ -299,6 +299,66 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 .tab-btn.active { color: #FF6B9D; }
 body.has-tab-bar .screen { padding-bottom: 76px; }
 
+/* ===== Student Detail Modal ===== */
+.modal-box-wide { max-width: 480px; width: calc(100vw - 32px); }
+.modal-subtitle { font-size: .8rem; color: #aaa; margin-top: 2px; }
+
+.detail-tabs {
+  display: flex; gap: 6px; padding-top: 14px;
+  border-bottom: 1.5px solid #FFE0EE; margin-bottom: 14px;
+}
+.detail-tab-btn {
+  padding: 8px 16px; border-radius: 20px 20px 0 0;
+  border: 1.5px solid transparent; background: #f5f5f5;
+  color: #aaa; font-size: .88rem; cursor: pointer; transition: all .15s;
+}
+.detail-tab-btn.active { background: #FF6B9D; color: #fff; border-color: #FF6B9D; }
+.detail-body { min-height: 180px; }
+.detail-empty { text-align: center; color: #aaa; padding: 40px 0; }
+
+/* ===== Calendar (GitHub-style) ===== */
+.cal-wrap { padding: 4px 0 8px; overflow-x: auto; }
+.cal-month-row, .cal-day-row {
+  display: grid;
+  grid-template-columns: 18px repeat(13, 14px);
+  gap: 2px;
+}
+.cal-month-row { margin-bottom: 3px; }
+.cal-day-row   { margin-bottom: 2px; }
+.cal-corner    { width: 18px; }
+.cal-month-cell { font-size: .6rem; color: #888; height: 14px; display: flex; align-items: flex-end; }
+.cal-day-label  { font-size: .62rem; color: #bbb; height: 14px; display: flex; align-items: center; }
+.cal-cell {
+  width: 14px; height: 14px; border-radius: 3px;
+  background: #f0f0f0;
+}
+.cal-future { background: transparent; border: 1px dashed #eee; }
+.cal-lv0 { background: #f0f0f0; }
+.cal-lv1 { background: #FFCCE0; }
+.cal-lv2 { background: #FF9EC0; }
+.cal-lv3 { background: #FF6B9D; }
+.cal-lv4 { background: #D63F70; }
+.cal-legend {
+  display: flex; align-items: center; gap: 3px;
+  margin-top: 8px; justify-content: flex-end;
+}
+.cal-legend-label { font-size: .68rem; color: #aaa; }
+
+/* ===== Line Chart ===== */
+.chart-wrap { padding: 4px 0; }
+.chart-title { font-size: .82rem; color: #888; text-align: center; margin-bottom: 6px; }
+.line-chart-svg { width: 100%; height: auto; display: block; }
+.chart-line { stroke: #FF6B9D; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart-area { fill: #FFE0EE; opacity: .55; }
+.chart-dot  { fill: #FF6B9D; stroke: #fff; stroke-width: 1.5; }
+.chart-axis { stroke: #ddd; stroke-width: 1; }
+.chart-tick { stroke: #ddd; stroke-width: 1; }
+.chart-label { font-size: 9px; fill: #999; font-family: sans-serif; }
+
+/* ===== Admin name link ===== */
+.col-name-link { cursor: pointer; }
+.col-name-link:hover strong { color: #FF6B9D; text-decoration: underline; }
+
 /* ===== Responsive ===== */
 @media (max-width: 360px) {
   .word-display { font-size: 1.6rem; }
