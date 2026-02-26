@@ -114,6 +114,12 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 .quiz-result.wrong-msg   { background: #FFE0E0; color: #a03030; }
 .quiz-result.hidden { display: none; }
 
+.quiz-next-area { margin-top: 14px; }
+.quiz-next-correct { display: flex; gap: 10px; }
+.quiz-next-btn { width: 100%; }
+.btn-lucky { background: #FF9800; color: #fff; }
+.btn-lucky:hover { background: #e68900; }
+
 /* ===== COMPLETE ===== */
 .complete-content { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 20px; text-align: center; }
 .complete-icon { font-size: 5rem; }
@@ -216,8 +222,15 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 .sp-label { font-size: .9rem; font-weight: bold; color: #333; }
 .sp-pct { font-size: .78rem; color: #aaa; }
 
-.home-footer-row { display: flex; gap: 8px; }
-.home-footer-row .btn { flex: 1; }
+.mypage-reset-area {
+  margin-top: 32px; padding: 20px 0 8px;
+  border-top: 1.5px dashed #FFB3D1; text-align: center;
+}
+.btn-reset-danger {
+  background: #fff; color: #E05555;
+  border: 1.5px solid #E05555; border-radius: 12px;
+}
+.btn-reset-danger:hover { background: #FFE0E0; }
 
 /* ===== TAB BAR (teacher only) ===== */
 .tab-bar {

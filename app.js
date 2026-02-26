@@ -312,29 +312,69 @@ function onAnswer(chosen, btn) {
   quiz.answered = true;
   const correct   = quiz.current.japanese;
   const isCorrect = chosen === correct;
-  const rec = state.records[quiz.current.no] || { correct: false, attempts: 0, wrongCount: 0 };
-  rec.attempts++;
-  if (isCorrect) { rec.correct = true; quiz.sessionCorrect++; }
-  else           { rec.correct = false; rec.wrongCount = (rec.wrongCount || 0) + 1; quiz.sessionWrong++; }
-  state.records[quiz.current.no] = rec;
-  saveState();
 
   document.querySelectorAll('.choice-btn').forEach(b => {
     b.disabled = true;
-    if (b.textContent === correct)           b.classList.add('correct');
-    else if (b === btn && !isCorrect)        b.classList.add('wrong');
+    if (b.textContent === correct)    b.classList.add('correct');
+    else if (b === btn && !isCorrect) b.classList.add('wrong');
   });
 
   const resultEl = document.getElementById('quiz-result');
   resultEl.className = 'quiz-result ' + (isCorrect ? 'correct-msg' : 'wrong-msg');
   resultEl.textContent = isCorrect ? '⭕ 正解！' : `✗ 不正解 — 正解：${correct}`;
-  setTimeout(nextQuestion, isCorrect ? 900 : 1800);
+
+  if (!isCorrect) {
+    // 不正解：即記録して「次へ」ボタンを表示
+    const rec = state.records[quiz.current.no] || { correct: false, attempts: 0, wrongCount: 0, lucky: false };
+    rec.attempts++;
+    rec.correct   = false;
+    rec.wrongCount = (rec.wrongCount || 0) + 1;
+    rec.lucky     = false;
+    state.records[quiz.current.no] = rec;
+    quiz.sessionWrong++;
+    saveState();
+    showNextArea('wrong');
+  } else {
+    // 正解：確信度を聞いてから記録
+    quiz.sessionCorrect++;
+    showNextArea('correct');
+  }
+}
+
+function showNextArea(type) {
+  const area = document.getElementById('quiz-next-area');
+  area.classList.remove('hidden');
+  if (type === 'correct') {
+    area.innerHTML = `
+      <div class="quiz-next-correct">
+        <button class="btn btn-primary quiz-next-btn" id="btn-confident">⭕ 確信して正解</button>
+        <button class="btn btn-lucky quiz-next-btn" id="btn-lucky">🔺 マグレの正解</button>
+      </div>`;
+    document.getElementById('btn-confident').addEventListener('click', () => confirmAnswer(false));
+    document.getElementById('btn-lucky').addEventListener('click',     () => confirmAnswer(true));
+  } else {
+    area.innerHTML = `<button class="btn btn-secondary quiz-next-btn" id="btn-next-wrong">次へ →</button>`;
+    document.getElementById('btn-next-wrong').addEventListener('click', nextQuestion);
+  }
+}
+
+function confirmAnswer(isLucky) {
+  const rec = state.records[quiz.current.no] || { correct: false, attempts: 0, wrongCount: 0, lucky: false };
+  rec.attempts++;
+  rec.correct = true;
+  rec.lucky   = isLucky;
+  state.records[quiz.current.no] = rec;
+  saveState();
+  nextQuestion();
 }
 
 function hideResult() {
   const el = document.getElementById('quiz-result');
   el.className = 'quiz-result hidden';
   el.textContent = '';
+  const area = document.getElementById('quiz-next-area');
+  area.innerHTML = '';
+  area.classList.add('hidden');
 }
 
 // ===== Complete =====

@@ -70,10 +70,7 @@
     <button id="btn-review-all" class="btn btn-review">
       ⭐ バツのみ復習モード
     </button>
-    <div class="home-footer-row">
-      <button id="btn-mypage" class="btn btn-secondary btn-small">👤 マイページ</button>
-      <button id="btn-reset" class="btn btn-secondary btn-small">データリセット</button>
-    </div>
+    <button id="btn-mypage" class="btn btn-secondary btn-small">👤 マイページ</button>
   </div>
 </div>
 
@@ -109,6 +106,7 @@
   </div>
   <div class="choices" id="choices"></div>
   <div class="quiz-result hidden" id="quiz-result"></div>
+  <div id="quiz-next-area" class="quiz-next-area hidden"></div>
 </div>
 
 <!-- 完了画面 -->
@@ -155,6 +153,11 @@
   <!-- セクション別進捗 -->
   <div class="mypage-section-title">📚 セクション別進捗</div>
   <div id="section-progress-list"></div>
+
+  <!-- データリセット -->
+  <div class="mypage-reset-area">
+    <button id="btn-reset" class="btn btn-reset-danger btn-small">🗑️ 学習データをリセット</button>
+  </div>
 </div>
 
 <!-- 管理画面 -->
