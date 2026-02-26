@@ -353,6 +353,78 @@ function showComplete() {
   showScreen('screen-complete');
 }
 
+// ===== My Page =====
+function openMyPage() {
+  // プロフィール表示
+  document.getElementById('profile-name-text').textContent = userName;
+  document.getElementById('profile-email').textContent = currentUser.email;
+  document.getElementById('profile-name-display').classList.remove('hidden');
+  document.getElementById('profile-name-edit').classList.add('hidden');
+
+  // 努力量
+  const records = state.records;
+  let totalAttempts = 0, totalAnsweredCorrect = 0, totalWrongCount = 0, masteredCount = 0;
+  WORDS.filter(w => w.japanese).forEach(w => {
+    const r = records[w.no];
+    if (!r) return;
+    totalAttempts       += r.attempts  || 0;
+    totalWrongCount     += r.wrongCount || 0;
+    if (r.correct) masteredCount++;
+  });
+  totalAnsweredCorrect = totalAttempts - totalWrongCount;
+  const accuracy = totalAttempts > 0 ? Math.round((totalAnsweredCorrect / totalAttempts) * 100) : 0;
+
+  document.getElementById('effort-grid').innerHTML = `
+    <div class="stat-item"><div class="stat-num">${masteredCount}</div><div class="stat-label">単語マスター数</div></div>
+    <div class="stat-item"><div class="stat-num">${totalAttempts}</div><div class="stat-label">総回答数</div></div>
+    <div class="stat-item"><div class="stat-num">${accuracy}<span style="font-size:1rem">%</span></div><div class="stat-label">正答率</div></div>
+    <div class="stat-item"><div class="stat-num">${totalWrongCount}</div><div class="stat-label">バツのある単語</div></div>
+  `;
+
+  // セクション別進捗
+  const list = document.getElementById('section-progress-list');
+  list.innerHTML = '';
+  SECTIONS.forEach(sec => {
+    const { correct, total } = getSectionStats(sec.id);
+    const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+    const cleared = correct === total && total > 0;
+    const item = document.createElement('div');
+    item.className = 'sp-item';
+    item.innerHTML = `
+      <div class="sp-header">
+        <span class="sp-label">${sec.label}${cleared ? ' ✅' : ''}</span>
+        <span class="sp-pct">${correct} / ${total}（${pct}%）</span>
+      </div>
+      <div class="progress-bar-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
+    `;
+    list.appendChild(item);
+  });
+
+  showScreen('screen-mypage');
+}
+
+async function saveName() {
+  const newName = document.getElementById('edit-name-input').value.trim();
+  if (!newName) return;
+  const btn = document.getElementById('btn-save-name');
+  btn.textContent = '保存中...';
+  btn.disabled = true;
+  try {
+    await db.collection('users').doc(currentUser.uid).update({ name: newName });
+    userName = newName;
+    document.getElementById('home-username').textContent = userName;
+    document.getElementById('admin-teacher-name').textContent = `講師: ${userName}`;
+    document.getElementById('profile-name-text').textContent = userName;
+    document.getElementById('profile-name-display').classList.remove('hidden');
+    document.getElementById('profile-name-edit').classList.add('hidden');
+  } catch (e) {
+    alert('保存に失敗しました: ' + e.message);
+  } finally {
+    btn.textContent = '保存';
+    btn.disabled = false;
+  }
+}
+
 // ===== Admin =====
 async function loadAdminData() {
   const wrap = document.getElementById('admin-table-wrap');
@@ -461,6 +533,20 @@ function setupAdminSearch(students) {
 document.getElementById('btn-admin-refresh').addEventListener('click', loadAdminData);
 
 // ===== Navigation =====
+document.getElementById('btn-mypage').addEventListener('click', openMyPage);
+document.getElementById('btn-back-mypage').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
+document.getElementById('btn-edit-name').addEventListener('click', () => {
+  document.getElementById('edit-name-input').value = userName;
+  document.getElementById('profile-name-display').classList.add('hidden');
+  document.getElementById('profile-name-edit').classList.remove('hidden');
+  document.getElementById('edit-name-input').focus();
+});
+document.getElementById('btn-cancel-name').addEventListener('click', () => {
+  document.getElementById('profile-name-display').classList.remove('hidden');
+  document.getElementById('profile-name-edit').classList.add('hidden');
+});
+document.getElementById('btn-save-name').addEventListener('click', saveName);
+
 document.getElementById('btn-back-home').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
 document.getElementById('btn-back-mode').addEventListener('click', () => { openMode(quiz.section); });
 document.getElementById('btn-start-normal').addEventListener('click', () => startQuiz('normal'));

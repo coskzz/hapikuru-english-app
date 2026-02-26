@@ -70,9 +70,10 @@
     <button id="btn-review-all" class="btn btn-review">
       ⭐ バツのみ復習モード
     </button>
-    <button id="btn-reset" class="btn btn-secondary btn-small">
-      データリセット
-    </button>
+    <div class="home-footer-row">
+      <button id="btn-mypage" class="btn btn-secondary btn-small">👤 マイページ</button>
+      <button id="btn-reset" class="btn btn-secondary btn-small">データリセット</button>
+    </div>
   </div>
 </div>
 
@@ -121,6 +122,39 @@
       <button class="btn btn-secondary" id="btn-complete-home">ホームへ</button>
     </div>
   </div>
+</div>
+
+<!-- マイページ -->
+<div id="screen-mypage" class="screen">
+  <div class="mypage-header">
+    <button class="back-btn" id="btn-back-mypage">← 戻る</button>
+    <h2>マイページ</h2>
+  </div>
+
+  <!-- プロフィール -->
+  <div class="mypage-profile-card">
+    <div class="profile-avatar">👤</div>
+    <div id="profile-name-display">
+      <div class="profile-name-text" id="profile-name-text"></div>
+      <button class="edit-name-btn" id="btn-edit-name">✏️ 名前を変更</button>
+    </div>
+    <div id="profile-name-edit" class="hidden">
+      <input type="text" id="edit-name-input" class="auth-input" placeholder="お名前">
+      <div class="profile-name-actions">
+        <button class="btn btn-primary btn-small" id="btn-save-name">保存</button>
+        <button class="btn btn-secondary btn-small" id="btn-cancel-name">キャンセル</button>
+      </div>
+    </div>
+    <div class="profile-email" id="profile-email"></div>
+  </div>
+
+  <!-- 努力量 -->
+  <div class="mypage-section-title">📊 学習の努力量</div>
+  <div class="effort-grid" id="effort-grid"></div>
+
+  <!-- セクション別進捗 -->
+  <div class="mypage-section-title">📚 セクション別進捗</div>
+  <div id="section-progress-list"></div>
 </div>
 
 <!-- 管理画面 -->
