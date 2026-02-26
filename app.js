@@ -540,6 +540,93 @@ async function saveName() {
   }
 }
 
+// ===== Report / Feedback =====
+let reportContext = null;
+
+function openReport(context) {
+  reportContext = context || null;
+  document.getElementById('report-message').value = '';
+  document.getElementById('report-char-count').textContent = '0文字（20文字以上必要）';
+  document.getElementById('report-char-count').className = 'report-char-count';
+  document.getElementById('report-error').classList.add('hidden');
+  document.getElementById('btn-submit-report').disabled = true;
+  document.querySelectorAll('.report-type-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
+  const ctxEl = document.getElementById('report-context');
+  if (context) {
+    ctxEl.textContent = `対象: No.${context.wordNo}  ${context.word} = ${context.japanese}`;
+    ctxEl.classList.remove('hidden');
+  } else {
+    ctxEl.classList.add('hidden');
+  }
+  document.getElementById('report-modal').classList.remove('hidden');
+  document.getElementById('report-message').focus();
+}
+
+function closeReport() {
+  document.getElementById('report-modal').classList.add('hidden');
+  reportContext = null;
+}
+
+async function submitReport() {
+  const message = document.getElementById('report-message').value.trim();
+  if (message.length < 20) return;
+  const activeType = document.querySelector('.report-type-btn.active');
+  const type = activeType?.dataset.type || 'other';
+  const btn = document.getElementById('btn-submit-report');
+  btn.textContent = '送信中...';
+  btn.disabled = true;
+  try {
+    await db.collection('reports').add({
+      type, message,
+      wordNo:   reportContext?.wordNo   || null,
+      word:     reportContext?.word     || null,
+      japanese: reportContext?.japanese || null,
+      userId:   currentUser.uid,
+      userName: userName,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    closeReport();
+    alert('ご報告ありがとうございます！');
+  } catch (e) {
+    const errEl = document.getElementById('report-error');
+    errEl.textContent = '送信に失敗しました: ' + e.message;
+    errEl.classList.remove('hidden');
+    btn.disabled = false;
+  } finally {
+    btn.textContent = '送信';
+  }
+}
+
+document.getElementById('report-type-group').addEventListener('click', (e) => {
+  const btn = e.target.closest('.report-type-btn');
+  if (!btn) return;
+  document.querySelectorAll('.report-type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+});
+
+document.getElementById('report-message').addEventListener('input', (e) => {
+  const len = e.target.value.trim().length;
+  const countEl = document.getElementById('report-char-count');
+  countEl.textContent = len < 20 ? `${len}文字（20文字以上必要）` : `${len}文字 ✓`;
+  countEl.className   = 'report-char-count' + (len >= 20 ? ' valid' : '');
+  document.getElementById('btn-submit-report').disabled = len < 20;
+});
+
+document.getElementById('report-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('report-modal')) closeReport();
+});
+document.getElementById('btn-close-report').addEventListener('click',  closeReport);
+document.getElementById('btn-cancel-report').addEventListener('click', closeReport);
+document.getElementById('btn-submit-report').addEventListener('click', submitReport);
+
+document.getElementById('btn-report-quiz').addEventListener('click', () => {
+  const ctx = quiz.current
+    ? { wordNo: quiz.current.no, word: quiz.current.word, japanese: quiz.current.japanese }
+    : null;
+  openReport(ctx);
+});
+document.getElementById('btn-report-general').addEventListener('click', () => openReport(null));
+
 // ===== Admin =====
 async function loadAdminData() {
   const wrap = document.getElementById('admin-table-wrap');

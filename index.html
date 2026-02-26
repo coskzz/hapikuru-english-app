@@ -96,6 +96,7 @@
       <span id="quiz-section-label"></span>
       <span id="quiz-mode-label"></span>
     </div>
+    <button class="report-link-btn" id="btn-report-quiz">⚠️ 報告</button>
   </div>
   <div class="progress-bar-wrap">
     <div class="progress-bar" id="progress-bar"></div>
@@ -155,6 +156,13 @@
   <div class="mypage-section-title">📚 セクション別進捗</div>
   <div id="section-progress-list"></div>
 
+  <!-- フィードバック -->
+  <div class="mypage-section-title">💬 フィードバック</div>
+  <div class="mypage-feedback-area">
+    <p class="feedback-desc">単語の誤りや機能リクエストなどをお気軽にお寄せください。</p>
+    <button class="btn btn-secondary btn-small" id="btn-report-general">📝 意見・要望を送る</button>
+  </div>
+
   <!-- データリセット -->
   <div class="mypage-reset-area">
     <button id="btn-reset" class="btn btn-reset-danger btn-small">🗑️ 学習データをリセット</button>
@@ -180,6 +188,30 @@
 
   <div id="admin-table-wrap">
     <p class="loading-text">データを読み込み中...</p>
+  </div>
+</div>
+
+<!-- 報告・フィードバックモーダル -->
+<div id="report-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">📝 報告・意見を送る</h3>
+      <button class="modal-close-btn" id="btn-close-report">✕</button>
+    </div>
+    <div id="report-context" class="report-context hidden"></div>
+    <div class="report-type-group" id="report-type-group">
+      <button class="report-type-btn active" data-type="word_error">❌ 単語の誤り</button>
+      <button class="report-type-btn" data-type="feature">💡 機能リクエスト</button>
+      <button class="report-type-btn" data-type="other">💬 その他</button>
+    </div>
+    <textarea id="report-message" class="report-textarea"
+      placeholder="具体的な内容を記入してください（20文字以上）" rows="4"></textarea>
+    <div class="report-char-count" id="report-char-count">0文字（20文字以上必要）</div>
+    <div class="auth-error hidden" id="report-error"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-small" id="btn-cancel-report">キャンセル</button>
+      <button class="btn btn-primary btn-small" id="btn-submit-report" disabled>送信</button>
+    </div>
   </div>
 </div>
 

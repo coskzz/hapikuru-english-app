@@ -232,6 +232,45 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 .sp-label { font-size: .9rem; font-weight: bold; color: #333; }
 .sp-pct { font-size: .78rem; color: #aaa; }
 
+/* ===== REPORT MODAL ===== */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-overlay.hidden { display: none; }
+.modal-box {
+  background: #fff; border-radius: 20px; width: 100%; max-width: 420px;
+  padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,.18); animation: fadeIn .18s;
+}
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.modal-title { font-size: 1.1rem; font-weight: bold; color: #FF6B9D; }
+.modal-close-btn { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: #aaa; padding: 4px 8px; border-radius: 8px; }
+.modal-close-btn:hover { background: #f0f0f0; color: #666; }
+.report-context { font-size: .82rem; background: #FFF0F6; border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; color: #555; }
+.report-type-group { display: flex; gap: 6px; margin-bottom: 14px; }
+.report-type-btn {
+  flex: 1; background: #f5f5f5; border: 1.5px solid #ddd; border-radius: 10px;
+  padding: 8px 4px; font-size: .75rem; cursor: pointer; font-weight: bold;
+  color: #666; transition: all .16s; text-align: center; line-height: 1.4;
+}
+.report-type-btn.active { background: #FFF0F6; border-color: #FF6B9D; color: #FF6B9D; }
+.report-textarea {
+  display: block; width: 100%; padding: 12px; border: 1.5px solid #ddd;
+  border-radius: 12px; font-size: .9rem; resize: vertical; outline: none;
+  font-family: inherit; transition: border-color .18s; min-height: 90px;
+}
+.report-textarea:focus { border-color: #FF6B9D; }
+.report-char-count { font-size: .78rem; color: #aaa; text-align: right; margin: 4px 0 10px; }
+.report-char-count.valid { color: #3DBF73; font-weight: bold; }
+.modal-footer { display: flex; gap: 8px; justify-content: flex-end; }
+.report-link-btn {
+  background: none; border: none; color: #FFB3D1; font-size: .75rem;
+  cursor: pointer; padding: 4px 0; margin-left: auto; white-space: nowrap;
+}
+.report-link-btn:hover { color: #FF6B9D; }
+.mypage-feedback-area { margin-bottom: 24px; }
+.feedback-desc { font-size: .85rem; color: #aaa; margin-bottom: 10px; line-height: 1.5; }
+
 .mypage-reset-area {
   margin-top: 32px; padding: 20px 0 8px;
   border-top: 1.5px dashed #FFB3D1; text-align: center;
