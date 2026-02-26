@@ -189,6 +189,26 @@ document.getElementById('show-login').addEventListener('click', (e) => {
   document.getElementById('form-login').classList.remove('hidden');
 });
 
+// ===== Part of Speech =====
+function getPos(word, japanese) {
+  const w = word.toLowerCase();
+  // 日本語訳から動詞を判定（最優先）
+  const verbJ = ['する', 'させる', 'される', 'てる', 'でる', 'ける', 'める', 'える', 'せる', 'ねる', 'べる', 'げる'];
+  if (verbJ.some(e => japanese.endsWith(e))) return '動';
+  // 日本語訳：い形容詞
+  if (japanese.endsWith('い')) return '形';
+  // 日本語訳：な形容詞
+  if (japanese.endsWith('な') || japanese.endsWith('の')) return '形';
+  // 英語語尾：副詞
+  if (w.endsWith('ly') && w.length > 4) return '副';
+  // 英語語尾：形容詞
+  if (/(?:ful|less|ive|ous|ible|able|ic|ish)$/.test(w)) return '形';
+  // 英語語尾：動詞
+  if (/(?:ize|ise|ify|ate)$/.test(w)) return '動';
+  // デフォルト：名詞
+  return '名';
+}
+
 // ===== Home =====
 function wordsForSection(sectionId) {
   return WORDS.filter(w => w.section === sectionId && w.japanese);
@@ -234,6 +254,17 @@ function openMode(sec) {
   const reviewBtn = document.getElementById('btn-start-review');
   reviewBtn.disabled = wrongWords.length === 0;
   reviewBtn.style.opacity = wrongWords.length === 0 ? '.4' : '1';
+
+  // 続きから再開ボタン
+  const resumeBtn = document.getElementById('btn-start-resume');
+  const saved = getSavedQuiz();
+  if (saved && saved.sectionId === sec.id) {
+    resumeBtn.classList.remove('hidden');
+    resumeBtn.textContent = `⏸ 続きから再開（残り ${saved.poolNos.length} 問）`;
+  } else {
+    resumeBtn.classList.add('hidden');
+  }
+
   showScreen('screen-mode');
 }
 
@@ -248,6 +279,7 @@ function shuffle(arr) {
 }
 
 function startQuiz(mode) {
+  localStorage.removeItem('quiz_resume');
   quiz.mode = mode;
   quiz.sessionCorrect = 0;
   quiz.sessionWrong   = 0;
@@ -319,9 +351,12 @@ function onAnswer(chosen, btn) {
     else if (b === btn && !isCorrect) b.classList.add('wrong');
   });
 
+  const pos = getPos(quiz.current.word, correct);
   const resultEl = document.getElementById('quiz-result');
   resultEl.className = 'quiz-result ' + (isCorrect ? 'correct-msg' : 'wrong-msg');
-  resultEl.textContent = isCorrect ? '⭕ 正解！' : `✗ 不正解 — 正解：${correct}`;
+  resultEl.innerHTML = isCorrect
+    ? `⭕ 正解！<div class="result-word-info">${quiz.current.word} <span class="pos-badge">${pos}</span> = ${correct}</div>`
+    : `✗ 不正解 — 正解：<strong>${correct}</strong><div class="result-word-info">${quiz.current.word} <span class="pos-badge">${pos}</span></div>`;
 
   if (!isCorrect) {
     // 不正解：即記録して「次へ」ボタンを表示
@@ -377,8 +412,48 @@ function hideResult() {
   area.classList.add('hidden');
 }
 
+// ===== Quiz Resume =====
+function getSavedQuiz() {
+  try { return JSON.parse(localStorage.getItem('quiz_resume')); } catch { return null; }
+}
+
+function saveQuizAndGoBack() {
+  // 現在の問題をプールに戻して状態を保存
+  const remainingPool = quiz.current ? [quiz.current, ...quiz.pool] : quiz.pool;
+  if (remainingPool.length > 0) {
+    localStorage.setItem('quiz_resume', JSON.stringify({
+      sectionId:    quiz.section.id,
+      sectionLabel: quiz.section.label,
+      sectionRange: quiz.section.range,
+      mode:         quiz.mode,
+      poolNos:      remainingPool.map(w => w.no),
+      sessionCorrect: quiz.sessionCorrect,
+      sessionWrong:   quiz.sessionWrong,
+    }));
+  }
+  openMode(quiz.section);
+}
+
+function resumeQuiz() {
+  const saved = getSavedQuiz();
+  if (!saved) return;
+  quiz.section      = { id: saved.sectionId, label: saved.sectionLabel, range: saved.sectionRange };
+  quiz.mode         = saved.mode;
+  quiz.sessionCorrect = saved.sessionCorrect;
+  quiz.sessionWrong   = saved.sessionWrong;
+  quiz.answered     = false;
+  quiz.allWords     = wordsForSection(quiz.section.id);
+  quiz.pool         = saved.poolNos.map(no => WORDS.find(w => w.no === no)).filter(Boolean);
+  if (quiz.pool.length === 0) { localStorage.removeItem('quiz_resume'); return; }
+  document.getElementById('quiz-section-label').textContent = quiz.section.label;
+  document.getElementById('quiz-mode-label').textContent = quiz.mode === 'review' ? '⭐ バツ復習' : '通常テスト';
+  showScreen('screen-quiz');
+  nextQuestion();
+}
+
 // ===== Complete =====
 function showComplete() {
+  localStorage.removeItem('quiz_resume');
   const total = quiz.sessionCorrect + quiz.sessionWrong;
   const pct   = total > 0 ? Math.round((quiz.sessionCorrect / total) * 100) : 0;
   const { correct: allCorrect, total: allTotal } = getSectionStats(quiz.section.id);
@@ -588,7 +663,8 @@ document.getElementById('btn-cancel-name').addEventListener('click', () => {
 document.getElementById('btn-save-name').addEventListener('click', saveName);
 
 document.getElementById('btn-back-home').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
-document.getElementById('btn-back-mode').addEventListener('click', () => { openMode(quiz.section); });
+document.getElementById('btn-back-mode').addEventListener('click', saveQuizAndGoBack);
+document.getElementById('btn-start-resume').addEventListener('click', resumeQuiz);
 document.getElementById('btn-start-normal').addEventListener('click', () => startQuiz('normal'));
 document.getElementById('btn-start-review').addEventListener('click', () => startQuiz('review'));
 document.getElementById('btn-complete-home').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
