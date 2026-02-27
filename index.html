@@ -70,7 +70,6 @@
     <button id="btn-review-all" class="btn btn-review">
       ⭐ バツのみ復習モード
     </button>
-    <button id="btn-mypage" class="btn btn-secondary btn-small">👤 マイページ</button>
   </div>
 </div>
 
@@ -252,20 +251,68 @@
   </div>
 </div>
 
+<!-- 学習データ画面 -->
+<div id="screen-stats" class="screen">
+  <div class="stats-header">
+    <div class="logo">📊 学習データ</div>
+    <span class="user-name" id="stats-username"></span>
+  </div>
+
+  <!-- ストリーク -->
+  <div class="streak-card">
+    <div class="streak-top">
+      <div>
+        <div class="streak-label">🔥 連続学習日数</div>
+        <div class="streak-best-row">最高記録: <span id="streak-best">0</span>日</div>
+      </div>
+      <div class="streak-num-wrap">
+        <span class="streak-num" id="streak-num">0</span>
+        <span class="streak-unit">日</span>
+      </div>
+    </div>
+    <div class="streak-week" id="streak-week"></div>
+  </div>
+
+  <!-- ポイント -->
+  <div class="points-card">
+    <div class="points-inner">
+      <span class="points-label">⭐ 累計ポイント</span>
+      <span class="points-num" id="stats-points">0</span>
+      <span class="points-unit">pt</span>
+    </div>
+  </div>
+
+  <!-- 学習の記録 -->
+  <div class="mypage-section-title">📚 学習の記録</div>
+  <div class="effort-grid" id="stats-effort-grid"></div>
+
+  <!-- グラフ -->
+  <div class="mypage-section-title">📈 習得語数の推移</div>
+  <div id="stats-chart"></div>
+</div>
+
 <!-- キャラクターウィジェット（クイズ画面以外に表示） -->
 <div id="chara-widget" class="chara-widget hidden">
   <div class="chara-bubble" id="chara-bubble"></div>
   <img class="chara-img" id="chara-img" src="" alt="先生">
 </div>
 
-<!-- タブバー（教師専用） -->
+<!-- タブバー（全ユーザー） -->
 <div id="tab-bar" class="tab-bar hidden">
-  <button class="tab-btn" id="tab-student" data-tab="student">
-    <span class="tab-icon">📚</span>
-    <span class="tab-label">学習</span>
+  <button class="tab-btn" id="tab-test" data-tab="test">
+    <span class="tab-icon">📖</span>
+    <span class="tab-label">PastanTest</span>
   </button>
-  <button class="tab-btn" id="tab-admin" data-tab="admin">
+  <button class="tab-btn" id="tab-stats" data-tab="stats">
     <span class="tab-icon">📊</span>
+    <span class="tab-label">学習データ</span>
+  </button>
+  <button class="tab-btn" id="tab-mypage" data-tab="mypage">
+    <span class="tab-icon">👤</span>
+    <span class="tab-label">マイページ</span>
+  </button>
+  <button class="tab-btn hidden" id="tab-admin" data-tab="admin">
+    <span class="tab-icon">🏫</span>
     <span class="tab-label">管理</span>
   </button>
 </div>

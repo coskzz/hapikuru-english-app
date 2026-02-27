@@ -25,7 +25,7 @@ const SECTIONS = [
 let currentUser  = null;
 let userRole     = 'student';
 let userName     = '';
-let state        = { records: {}, dailyLog: {} };
+let state        = { records: {}, dailyLog: {}, streak: 0, bestStreak: 0, points: 0, lastStudyDate: null };
 let adminStudentsMap = {};
 let currentDetailUid = null;
 
@@ -35,11 +35,33 @@ let quiz = {
 };
 
 // ===== Screens =====
+const SCREEN_TAB = {
+  'screen-home': 'test', 'screen-mode': 'test', 'screen-complete': 'test',
+  'screen-stats': 'stats',
+  'screen-mypage': 'mypage',
+  'screen-admin': 'admin',
+};
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
   updateChara(id);
+
+  const bar = document.getElementById('tab-bar');
+  if (id === 'screen-quiz' || !currentUser) {
+    bar.classList.add('hidden');
+    document.body.classList.remove('has-tab-bar');
+  } else {
+    bar.classList.remove('hidden');
+    document.body.classList.add('has-tab-bar');
+    const tabId = SCREEN_TAB[id];
+    if (tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      const el = document.getElementById(`tab-${tabId}`);
+      if (el) el.classList.add('active');
+    }
+  }
 }
 
 // ===== Character Coach =====
@@ -47,7 +69,8 @@ const CHARA_CONFIG = {
   'screen-home':     { pose: 'hello',  msgs: ['今日も頑張ろう！', 'コツコツ続けよう！', '英検合格まで一緒に！'] },
   'screen-mode':     { pose: 'fight',  msgs: ['さあ挑戦だ！', '全力で行こう！', 'できるよ、信じてる！'] },
   'screen-complete': { pose: 'cheer',  msgs: ['よく頑張った！', '素晴らしい！', 'その調子で続けよう！'] },
-  'screen-mypage':   { pose: 'study',  msgs: ['コツコツが大切！', '振り返りが力になるよ！', '継続は力なり！'] },
+  'screen-stats':    { pose: 'study',  msgs: ['コツコツが大切！', '記録が力になるよ！', '続けることが大事！'] },
+  'screen-mypage':   { pose: 'think',  msgs: ['コツコツが大切！', '振り返りが力になるよ！', '継続は力なり！'] },
 };
 const CHARA_HIDDEN = new Set(['screen-quiz', 'screen-loading', 'screen-login', 'screen-admin']);
 
@@ -114,12 +137,20 @@ async function loadUserData(uid) {
     const d = doc.data();
     userRole  = d.role  || 'student';
     userName  = d.name  || currentUser.email;
-    state.records  = d.records  || {};
-    state.dailyLog = d.dailyLog || {};
+    state.records       = d.records       || {};
+    state.dailyLog      = d.dailyLog      || {};
+    state.streak        = d.streak        || 0;
+    state.bestStreak    = d.bestStreak    || 0;
+    state.points        = d.points        || 0;
+    state.lastStudyDate = d.lastStudyDate || null;
   } else {
     userRole = 'student';
-    state.records  = {};
-    state.dailyLog = {};
+    state.records       = {};
+    state.dailyLog      = {};
+    state.streak        = 0;
+    state.bestStreak    = 0;
+    state.points        = 0;
+    state.lastStudyDate = null;
   }
 }
 
@@ -129,14 +160,19 @@ function saveState() {
   const mastered = WORDS.filter(w => w.japanese && state.records[w.no]?.correct).length;
   state.dailyLog[today] = { mastered };
   db.collection('users').doc(currentUser.uid).set(
-    { records: state.records, dailyLog: state.dailyLog, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+    {
+      records: state.records, dailyLog: state.dailyLog,
+      streak: state.streak, bestStreak: state.bestStreak,
+      points: state.points, lastStudyDate: state.lastStudyDate,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    },
     { merge: true }
   ).catch(console.error);
 }
 
 function resetState() {
   if (!confirm('全学習データをリセットしますか？\nこの操作は元に戻せません。')) return;
-  state = { records: {}, dailyLog: {} };
+  state = { records: {}, dailyLog: {}, streak: 0, bestStreak: 0, points: 0, lastStudyDate: null };
   saveState();
   renderHome();
 }
@@ -148,23 +184,22 @@ auth.onAuthStateChanged(async (user) => {
     showScreen('screen-loading');
     await loadUserData(user.uid);
 
+    document.getElementById('home-username').textContent = userName;
     if (userRole === 'teacher') {
       document.getElementById('admin-teacher-name').textContent = `講師: ${userName}`;
-      document.getElementById('home-username').textContent = userName;
-      showTabBar(true);
-      setActiveTab('admin');
+      document.getElementById('tab-admin').classList.remove('hidden');
       renderHome();
       showScreen('screen-admin');
       loadAdminData();
     } else {
-      showTabBar(false);
-      document.getElementById('home-username').textContent = userName;
+      document.getElementById('tab-admin').classList.add('hidden');
       renderHome();
       showScreen('screen-home');
     }
   } else {
     currentUser = null;
-    showTabBar(false);
+    document.getElementById('tab-bar').classList.add('hidden');
+    document.body.classList.remove('has-tab-bar');
     showScreen('screen-login');
   }
 });
@@ -449,12 +484,34 @@ function showNextArea(type) {
   }
 }
 
+// ===== Streak / Points =====
+function updateStreak() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (state.lastStudyDate === today) return; // already counted today
+
+  const yest = new Date(); yest.setDate(yest.getDate() - 1);
+  const yesterdayStr = yest.toISOString().slice(0, 10);
+
+  if (state.lastStudyDate === yesterdayStr) {
+    state.streak += 1;
+  } else {
+    state.streak = 1; // reset or first time
+  }
+  state.bestStreak    = Math.max(state.bestStreak, state.streak);
+  state.lastStudyDate = today;
+
+  // Points: +10 base + streak bonus
+  const bonus = state.streak >= 30 ? 20 : state.streak >= 7 ? 10 : state.streak >= 3 ? 5 : 0;
+  state.points += 10 + bonus;
+}
+
 function confirmAnswer(isLucky) {
   const rec = state.records[quiz.current.no] || { correct: false, attempts: 0, wrongCount: 0, lucky: false };
   rec.attempts++;
   rec.correct = true;
   rec.lucky   = isLucky;
   state.records[quiz.current.no] = rec;
+  updateStreak();
   saveState();
   nextQuestion();
 }
@@ -572,6 +629,61 @@ function openMyPage() {
   });
 
   showScreen('screen-mypage');
+}
+
+// ===== Stats (学習データ) =====
+function openStats() {
+  document.getElementById('stats-username').textContent = userName;
+  document.getElementById('streak-num').textContent  = state.streak;
+  document.getElementById('streak-best').textContent = state.bestStreak;
+  document.getElementById('stats-points').textContent = state.points.toLocaleString();
+
+  renderStreakWeek();
+
+  // Effort stats
+  let totalAttempts = 0, totalWrongCount = 0, masteredCount = 0;
+  WORDS.filter(w => w.japanese).forEach(w => {
+    const r = state.records[w.no];
+    if (!r) return;
+    totalAttempts  += r.attempts   || 0;
+    totalWrongCount += r.wrongCount || 0;
+    if (r.correct) masteredCount++;
+  });
+  const totalDays = Object.keys(state.dailyLog).length;
+
+  document.getElementById('stats-effort-grid').innerHTML = `
+    <div class="stat-item"><div class="stat-num">${masteredCount}</div><div class="stat-label">習得単語数</div></div>
+    <div class="stat-item"><div class="stat-num">${totalDays}</div><div class="stat-label">学習した日数</div></div>
+    <div class="stat-item"><div class="stat-num">${totalAttempts}</div><div class="stat-label">累計解答数</div></div>
+    <div class="stat-item"><div class="stat-num">${totalAttempts - totalWrongCount}</div><div class="stat-label">正解数</div></div>
+  `;
+
+  // Chart
+  renderLineChart(state.dailyLog, document.getElementById('stats-chart'));
+  showScreen('screen-stats');
+}
+
+function renderStreakWeek() {
+  const today = new Date();
+  const DOW = ['日', '月', '火', '水', '木', '金', '土'];
+  let html = '';
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const dateStr  = d.toISOString().slice(0, 10);
+    const isToday  = i === 0;
+    const studied  = !!state.dailyLog[dateStr];
+    const mastered = state.dailyLog[dateStr]?.mastered || 0;
+    const dayLabel = isToday ? '今日' : DOW[d.getDay()];
+    html += `
+      <div class="streak-day">
+        <div class="streak-day-label${isToday ? ' today-label' : ''}">${dayLabel}</div>
+        <div class="streak-day-date">${d.getMonth()+1}/${d.getDate()}</div>
+        <div class="streak-circle${studied ? ' studied' : ''}">${studied ? '✓' : ''}</div>
+        <div class="streak-day-count">${mastered > 0 ? mastered : ''}</div>
+      </div>`;
+  }
+  document.getElementById('streak-week').innerHTML = html;
 }
 
 async function saveName() {
@@ -835,15 +947,17 @@ function renderAdminTable(students) {
 }
 
 // ===== Student Detail Modal =====
+let adminCalViewDate = new Date();
+
 function openStudentDetail(uid) {
   const student = adminStudentsMap[uid];
   if (!student) return;
   currentDetailUid = uid;
+  adminCalViewDate  = new Date(); // 当月にリセット
 
   document.getElementById('detail-student-name').textContent = student.name || '—';
   document.getElementById('detail-student-email').textContent = student.email || '';
 
-  // Reset to calendar tab
   document.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('detail-tab-calendar').classList.add('active');
 
@@ -851,74 +965,63 @@ function openStudentDetail(uid) {
   document.getElementById('student-detail-modal').classList.remove('hidden');
 }
 
+// 月カレンダーナビゲーション（onclick属性から呼ばれる）
+function calNavMonth(delta) {
+  adminCalViewDate.setMonth(adminCalViewDate.getMonth() + delta);
+  const student = adminStudentsMap[currentDetailUid];
+  if (student) renderCalendarView(student.dailyLog || {}, document.getElementById('detail-body'));
+}
+
 function renderCalendarView(dailyLog, container) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const year  = adminCalViewDate.getFullYear();
+  const month = adminCalViewDate.getMonth();
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
+  const lastDay  = new Date(year, month + 1, 0).getDate();
 
   const values = Object.values(dailyLog).map(d => d.mastered || 0);
   const maxVal = values.length > 0 ? Math.max(...values) : 1;
 
-  // Go back 90 days then rewind to Sunday
-  const startDate = new Date(today);
-  startDate.setDate(today.getDate() - 90);
-  startDate.setDate(startDate.getDate() - startDate.getDay());
+  const DOW = ['日', '月', '火', '水', '木', '金', '土'];
 
-  const NUM_WEEKS = 13;
-  const DAYS = ['日', '月', '火', '水', '木', '金', '土'];
+  let html = '<div class="monthly-cal">';
+  html += `
+    <div class="monthly-cal-header">
+      <button class="cal-nav-btn" onclick="calNavMonth(-1)">‹</button>
+      <span class="monthly-cal-title">${year}年${month + 1}月</span>
+      <button class="cal-nav-btn" onclick="calNavMonth(1)">›</button>
+    </div>
+    <div class="monthly-cal-dow">
+      ${DOW.map((d, i) => `<div class="dow-cell${i===0?' dow-sun':i===6?' dow-sat':''}">${d}</div>`).join('')}
+    </div>
+    <div class="monthly-cal-grid">
+  `;
 
-  // Build grid[week][day]
-  const grid = [];
-  for (let w = 0; w < NUM_WEEKS; w++) {
-    grid[w] = [];
-    for (let d = 0; d < 7; d++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + w * 7 + d);
-      const dateStr = date.toISOString().slice(0, 10);
-      const mastered = dailyLog[dateStr]?.mastered || 0;
-      const isFuture = date > today;
-      let level = 0;
-      if (!isFuture && mastered > 0) {
-        level = Math.min(4, Math.ceil((mastered / maxVal) * 4));
-      }
-      grid[w][d] = { dateStr, mastered, isFuture, level };
-    }
+  // 月初の空白セル
+  for (let i = 0; i < firstDow; i++) {
+    html += '<div class="mday-cell mday-empty"></div>';
   }
 
-  // Month labels (show when month changes)
-  let lastMonth = -1;
-  const monthLabels = grid.map(week => {
-    const d = new Date(week[0].dateStr);
-    const m = d.getMonth();
-    if (m !== lastMonth) { lastMonth = m; return `${m + 1}月`; }
-    return '';
-  });
+  for (let day = 1; day <= lastDay; day++) {
+    const mm  = String(month + 1).padStart(2, '0');
+    const dd  = String(day).padStart(2, '0');
+    const dateStr = `${year}-${mm}-${dd}`;
+    const log     = dailyLog[dateStr];
+    const mastered = log?.mastered || 0;
+    const isToday  = dateStr === todayStr;
+    const dow      = new Date(year, month, day).getDay();
+    const studied  = mastered > 0;
+    const level    = studied ? Math.min(4, Math.ceil((mastered / maxVal) * 4)) : 0;
 
-  let html = '<div class="cal-wrap">';
-
-  // Month label row
-  html += '<div class="cal-month-row"><div class="cal-corner"></div>';
-  monthLabels.forEach(label => { html += `<div class="cal-month-cell">${label}</div>`; });
-  html += '</div>';
-
-  // Day rows
-  for (let d = 0; d < 7; d++) {
-    html += '<div class="cal-day-row">';
-    html += `<div class="cal-day-label">${d % 2 === 1 ? DAYS[d] : ''}</div>`;
-    for (let w = 0; w < NUM_WEEKS; w++) {
-      const cell = grid[w][d];
-      const cls = cell.isFuture ? 'cal-cell cal-future' : `cal-cell cal-lv${cell.level}`;
-      const title = cell.isFuture ? '' : `${cell.dateStr}: ${cell.mastered}語`;
-      html += `<div class="${cls}" title="${title}"></div>`;
-    }
-    html += '</div>';
+    html += `
+      <div class="mday-cell${isToday ? ' mday-today' : ''}${dow===0?' mday-sun':dow===6?' mday-sat':''}${studied?' mday-studied':''}">
+        <div class="mday-num">${day}</div>
+        ${studied ? `<div class="mday-badge cal-lv${level}">${mastered}</div>` : ''}
+      </div>`;
   }
 
-  // Legend
-  html += '<div class="cal-legend"><span class="cal-legend-label">少</span>';
-  for (let i = 0; i <= 4; i++) { html += `<div class="cal-cell cal-lv${i}"></div>`; }
-  html += '<span class="cal-legend-label">多</span></div>';
-
-  html += '</div>';
+  html += '</div></div>';
   container.innerHTML = html;
 }
 
@@ -1006,7 +1109,6 @@ document.querySelectorAll('.detail-tab-btn').forEach(btn => {
 });
 
 // ===== Navigation =====
-document.getElementById('btn-mypage').addEventListener('click', openMyPage);
 document.getElementById('btn-back-mypage').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
 document.getElementById('btn-edit-name').addEventListener('click', () => {
   document.getElementById('edit-name-input').value = userName;
@@ -1029,16 +1131,18 @@ document.getElementById('btn-complete-home').addEventListener('click', () => { r
 document.getElementById('btn-complete-retry').addEventListener('click', () => startQuiz(quiz.mode));
 document.getElementById('btn-reset').addEventListener('click', resetState);
 
-// ===== Teacher Tab Bar Click =====
-document.getElementById('tab-admin').addEventListener('click', () => {
-  setActiveTab('admin');
-  showScreen('screen-admin');
-  loadAdminData();
+// ===== Bottom Tab Bar =====
+document.getElementById('tab-test').addEventListener('click', () => {
+  renderHome(); showScreen('screen-home');
 });
-document.getElementById('tab-student').addEventListener('click', () => {
-  setActiveTab('student');
-  renderHome();
-  showScreen('screen-home');
+document.getElementById('tab-stats').addEventListener('click', () => {
+  openStats();
+});
+document.getElementById('tab-mypage').addEventListener('click', () => {
+  openMyPage();
+});
+document.getElementById('tab-admin').addEventListener('click', () => {
+  showScreen('screen-admin'); loadAdminData();
 });
 
 document.getElementById('btn-review-all').addEventListener('click', () => {
