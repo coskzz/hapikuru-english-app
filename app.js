@@ -25,7 +25,7 @@ const SECTIONS = [
 let currentUser  = null;
 let userRole     = 'student';
 let userName     = '';
-let state        = { records: {}, dailyLog: {}, streak: 0, bestStreak: 0, points: 0, lastStudyDate: null };
+let state        = { records: {}, dailyLog: {}, streak: 0, bestStreak: 0, points: 0, lastStudyDate: null, tutorialDone: false, memos: {} };
 let adminStudentsMap = {};
 let currentDetailUid = null;
 
@@ -65,12 +65,22 @@ function showScreen(id) {
 }
 
 // ===== Character Coach =====
+// pose → ファイル名マッピング
+// 画像は images/ フォルダに配置
+// hello:  花を持ってウインク（ホーム）
+// fight:  格闘ポーズ（モード選択）
+// cheer:  両手を挙げて応援（完了・高得点）
+// happy:  ピースサイン笑顔（完了・中得点）
+// worry:  顔に手を当てて困り顔（完了・低得点）
+// teach:  指を立てて教える（完了・中）
+// study:  本を読んでいる・眼鏡（学習データ）
+// think:  顎に手を当てて考える（マイページ）
 const CHARA_CONFIG = {
-  'screen-home':     { pose: 'hello',  msgs: ['今日も頑張ろう！', 'コツコツ続けよう！', '英検合格まで一緒に！'] },
-  'screen-mode':     { pose: 'fight',  msgs: ['さあ挑戦だ！', '全力で行こう！', 'できるよ、信じてる！'] },
-  'screen-complete': { pose: 'cheer',  msgs: ['よく頑張った！', '素晴らしい！', 'その調子で続けよう！'] },
-  'screen-stats':    { pose: 'study',  msgs: ['コツコツが大切！', '記録が力になるよ！', '続けることが大事！'] },
-  'screen-mypage':   { pose: 'think',  msgs: ['コツコツが大切！', '振り返りが力になるよ！', '継続は力なり！'] },
+  'screen-home':     { pose: 'hello', msgs: ['今日も頑張ろう！', 'コツコツ続けよう！', '英検合格まで一緒に！'] },
+  'screen-mode':     { pose: 'fight', msgs: ['さあ挑戦だ！', '全力で行こう！', 'できるよ、信じてる！'] },
+  'screen-complete': { pose: 'cheer', msgs: ['よく頑張った！', '素晴らしい！', 'その調子で続けよう！'] },
+  'screen-stats':    { pose: 'study', msgs: ['コツコツが大切！', '記録が力になるよ！', '続けることが大事！'] },
+  'screen-mypage':   { pose: 'think', msgs: ['コツコツが大切！', '振り返りが力になるよ！', '継続は力なり！'] },
 };
 const CHARA_HIDDEN = new Set(['screen-quiz', 'screen-loading', 'screen-login', 'screen-admin']);
 
@@ -83,16 +93,17 @@ function updateChara(screenId) {
   const cfg = CHARA_CONFIG[screenId];
   if (!cfg) { widget.classList.add('hidden'); return; }
 
-  // 完了画面はスコアで使い分け
+  // 完了画面はスコアでポーズを使い分け
   let pose = cfg.pose;
   if (screenId === 'screen-complete') {
     const total = quiz.sessionCorrect + quiz.sessionWrong;
     const pct   = total > 0 ? quiz.sessionCorrect / total : 0;
-    pose = pct >= 0.8 ? 'cheer' : pct >= 0.5 ? 'teach' : 'think';
+    pose = pct >= 0.8 ? 'cheer' : pct >= 0.5 ? 'happy' : 'worry';
   }
 
   const msg = cfg.msgs[Math.floor(Math.random() * cfg.msgs.length)];
-  document.getElementById('chara-img').src    = `images/chara_${pose}.png`;
+  const img = document.getElementById('chara-img');
+  img.src = `images/chara_${pose}.png`;
   document.getElementById('chara-bubble').textContent = msg;
   widget.classList.remove('hidden');
 }
@@ -143,6 +154,8 @@ async function loadUserData(uid) {
     state.bestStreak    = d.bestStreak    || 0;
     state.points        = d.points        || 0;
     state.lastStudyDate = d.lastStudyDate || null;
+    state.tutorialDone  = d.tutorialDone  || false;
+    state.memos         = d.memos         || {};
   } else {
     userRole = 'student';
     state.records       = {};
@@ -151,6 +164,8 @@ async function loadUserData(uid) {
     state.bestStreak    = 0;
     state.points        = 0;
     state.lastStudyDate = null;
+    state.tutorialDone  = false;
+    state.memos         = {};
   }
 }
 
@@ -164,6 +179,8 @@ function saveState() {
       records: state.records, dailyLog: state.dailyLog,
       streak: state.streak, bestStreak: state.bestStreak,
       points: state.points, lastStudyDate: state.lastStudyDate,
+      tutorialDone: state.tutorialDone,
+      memos: state.memos,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
@@ -172,7 +189,7 @@ function saveState() {
 
 function resetState() {
   if (!confirm('全学習データをリセットしますか？\nこの操作は元に戻せません。')) return;
-  state = { records: {}, dailyLog: {}, streak: 0, bestStreak: 0, points: 0, lastStudyDate: null };
+  state = { records: {}, dailyLog: {}, streak: 0, bestStreak: 0, points: 0, lastStudyDate: null, tutorialDone: state.tutorialDone, memos: {} };
   saveState();
   renderHome();
 }
@@ -195,6 +212,9 @@ auth.onAuthStateChanged(async (user) => {
       document.getElementById('tab-admin').classList.add('hidden');
       renderHome();
       showScreen('screen-home');
+      if (!state.tutorialDone) {
+        setTimeout(() => openTutorial(), 600);
+      }
     }
   } else {
     currentUser = null;
@@ -336,15 +356,30 @@ function openMode(sec) {
   quiz.section = sec;
   document.getElementById('mode-section-title').textContent = `${sec.label}（${sec.range}）`;
   const { correct, total } = getSectionStats(sec.id);
-  const wrongWords = wordsForSection(sec.id).filter(w => (state.records[w.no]?.wrongCount || 0) > 0);
+  const words = wordsForSection(sec.id);
+  const wrongWords  = words.filter(w => (state.records[w.no]?.wrongCount || 0) > 0);
+  const luckyWords  = words.filter(w => state.records[w.no]?.lucky === true);
+  const combinedLen = words.filter(w =>
+    (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.lucky === true
+  ).length;
+
   document.getElementById('mode-stats').innerHTML = `
     <strong>正解済み:</strong> ${correct}/${total}<br>
-    <strong>バツのある単語:</strong> ${wrongWords.length} 個<br>
+    <strong>バツのある単語:</strong> ${wrongWords.length} 個 ／ <strong>まぐれ正解:</strong> ${luckyWords.length} 個<br>
     <strong>未回答:</strong> ${total - correct} 個
   `;
+
   const reviewBtn = document.getElementById('btn-start-review');
   reviewBtn.disabled = wrongWords.length === 0;
   reviewBtn.style.opacity = wrongWords.length === 0 ? '.4' : '1';
+
+  const luckyBtn = document.getElementById('btn-start-lucky');
+  luckyBtn.disabled = luckyWords.length === 0;
+  luckyBtn.style.opacity = luckyWords.length === 0 ? '.4' : '1';
+
+  const combinedBtn = document.getElementById('btn-start-review-combined');
+  combinedBtn.disabled = combinedLen === 0;
+  combinedBtn.style.opacity = combinedLen === 0 ? '.4' : '1';
 
   // 続きから再開ボタン
   const resumeBtn = document.getElementById('btn-start-resume');
@@ -380,6 +415,12 @@ function startQuiz(mode) {
 
   if (mode === 'review') {
     quiz.pool = shuffle(allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0));
+  } else if (mode === 'lucky') {
+    quiz.pool = shuffle(allWords.filter(w => state.records[w.no]?.lucky === true));
+  } else if (mode === 'review-combined') {
+    quiz.pool = shuffle(allWords.filter(w =>
+      (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.lucky === true
+    ));
   } else {
     quiz.pool = shuffle(allWords.filter(w => !state.records[w.no]?.correct));
     if (quiz.pool.length === 0) {
@@ -390,7 +431,8 @@ function startQuiz(mode) {
   }
   if (quiz.pool.length === 0) { alert('出題できる単語がありません。'); return; }
   document.getElementById('quiz-section-label').textContent = quiz.section.label;
-  document.getElementById('quiz-mode-label').textContent = mode === 'review' ? '⭐ バツ復習' : '通常テスト';
+  const modeLabels = { review: '⭐ バツ復習', lucky: '🔺 まぐれ復習', 'review-combined': '⭐🔺 バツ+まぐれ復習' };
+  document.getElementById('quiz-mode-label').textContent = modeLabels[mode] || '通常テスト';
   showScreen('screen-quiz');
   nextQuestion();
 }
@@ -402,6 +444,10 @@ function nextQuestion() {
 
   const total = quiz.mode === 'review'
     ? quiz.allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0).length
+    : quiz.mode === 'lucky'
+    ? quiz.allWords.filter(w => state.records[w.no]?.lucky === true).length
+    : quiz.mode === 'review-combined'
+    ? quiz.allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.lucky === true).length
     : quiz.allWords.length;
   const done = quiz.sessionCorrect + quiz.sessionWrong;
   const pct  = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -410,9 +456,33 @@ function nextQuestion() {
   document.getElementById('word-display').textContent  = quiz.current.word;
   document.getElementById('word-no').textContent       = `No.${quiz.current.no}`;
 
+  // 発音記号
+  const phonetic = (typeof PHONETICS !== 'undefined') ? PHONETICS[quiz.current.word.toLowerCase()] : null;
+  const phoneticEl = document.getElementById('word-phonetic');
+  if (phoneticEl) {
+    phoneticEl.textContent = phonetic || '';
+    phoneticEl.style.visibility = phonetic ? 'visible' : 'hidden';
+  }
+
   const correctAnswer = quiz.current.japanese;
-  const pool   = quiz.allWords.filter(w => w.no !== quiz.current.no && w.japanese && w.japanese !== correctAnswer);
-  const wrongs = shuffle(pool).slice(0, 3).map(w => w.japanese);
+  const correctPos    = getPos(quiz.current.word, quiz.current.japanese);
+
+  // 同品詞のダミー候補（優先）
+  const samePosCandidates = shuffle(
+    quiz.allWords.filter(w =>
+      w.no !== quiz.current.no && w.japanese && w.japanese !== correctAnswer &&
+      getPos(w.word, w.japanese) === correctPos
+    )
+  );
+  // 不足分の補充用（他品詞）
+  const otherCandidates = shuffle(
+    quiz.allWords.filter(w =>
+      w.no !== quiz.current.no && w.japanese && w.japanese !== correctAnswer &&
+      getPos(w.word, w.japanese) !== correctPos
+    )
+  );
+  // 同品詞優先で3つ集める
+  const wrongs = [...samePosCandidates, ...otherCandidates].slice(0, 3).map(w => w.japanese);
   quiz.choices = shuffle([correctAnswer, ...wrongs]);
   renderChoices();
   hideResult();
@@ -448,6 +518,52 @@ function onAnswer(chosen, btn) {
   resultEl.innerHTML = isCorrect
     ? `⭕ 正解！<div class="result-word-info">${quiz.current.word} <span class="pos-badge">${pos}</span> = ${correct}</div>`
     : `✗ 不正解 — 正解：<strong>${correct}</strong><div class="result-word-info">${quiz.current.word} <span class="pos-badge">${pos}</span></div>`;
+
+  // 例文・語源・関連語を表示
+  const extras = (typeof WORD_EXTRAS !== 'undefined') ? WORD_EXTRAS[quiz.current.word.toLowerCase()] : null;
+  if (extras) {
+    let extrasHtml = '<div class="word-extras">';
+    if (extras.example) {
+      const lines = extras.example.split('\n');
+      extrasHtml += `<div class="extras-block">
+        <div class="extras-label">📝 例文</div>
+        <div class="extras-example-en">${lines[0] || ''}</div>
+        ${lines[1] ? `<div class="extras-example-ja">${lines[1]}</div>` : ''}
+      </div>`;
+    }
+    if (extras.etymology) {
+      extrasHtml += `<div class="extras-block">
+        <div class="extras-label">🔤 語源</div>
+        <div class="extras-body">${extras.etymology}</div>
+      </div>`;
+    }
+    if (extras.related && extras.related.length > 0) {
+      extrasHtml += `<div class="extras-block">
+        <div class="extras-label">🔗 関連語</div>
+        <div class="extras-related">${extras.related.map(r => `<span class="extras-related-tag">${r}</span>`).join('')}</div>
+      </div>`;
+    }
+    extrasHtml += '</div>';
+    resultEl.innerHTML += extrasHtml;
+  }
+
+  // メモ表示・編集エリア
+  const memoNo = quiz.current.no;
+  const existingMemo = (state.memos || {})[memoNo] || '';
+  resultEl.innerHTML += `
+    <div class="quiz-memo-area">
+      <div class="quiz-memo-display${existingMemo ? '' : ' hidden'}" id="memo-display-${memoNo}">${existingMemo}</div>
+      <button class="btn-memo-toggle" id="memo-toggle-btn-${memoNo}" onclick="toggleMemoEdit('${memoNo}')">
+        ${existingMemo ? '✏️ メモを編集' : '📝 メモを追加'}
+      </button>
+      <div class="memo-edit-area hidden" id="memo-edit-${memoNo}">
+        <textarea class="memo-textarea" id="memo-text-${memoNo}" placeholder="自分なりの覚え方をメモしよう...">${existingMemo}</textarea>
+        <div class="memo-edit-btns">
+          <button class="btn btn-primary btn-small" onclick="saveMemo('${memoNo}')">保存</button>
+          <button class="btn btn-secondary btn-small" onclick="toggleMemoEdit('${memoNo}')">キャンセル</button>
+        </div>
+      </div>
+    </div>`;
 
   if (!isCorrect) {
     // 不正解：即記録して「次へ」ボタンを表示
@@ -581,6 +697,94 @@ function showComplete() {
   showScreen('screen-complete');
 }
 
+// ===== Tutorial =====
+const TUTORIAL_STEPS = [
+  {
+    icon: '👋',
+    title: 'ハピクル英語塾へようこそ！',
+    body: 'このアプリで英検準1級の単語を楽しく学べます。まずは基本的な使い方を説明します！',
+  },
+  {
+    icon: '📖',
+    title: 'セクションを選ぼう',
+    body: 'ホーム画面のカードをタップして、テストしたいセクションを選びます。\n1回300語ずつ、コツコツ進めましょう！',
+  },
+  {
+    icon: '✅',
+    title: '問題に答えよう',
+    body: '4択の選択肢から正しい日本語訳を選びます。\n答えた後、例文・語源・関連語も確認できます！',
+  },
+  {
+    icon: '⭕🔺',
+    title: '確信度を教えて！',
+    body: '正解した後は「確信して正解」か「まぐれ正解」を選びましょう。\nまぐれ正解は後でまとめて復習できます！',
+  },
+  {
+    icon: '⭐',
+    title: '復習モードを活用しよう',
+    body: 'セクション画面では、バツのみ・まぐれのみ・バツ+まぐれの3パターンで集中復習できます！',
+  },
+  {
+    icon: '🔥',
+    title: 'ストリークを伸ばそう',
+    body: '毎日テストを続けると連続学習日数が増えてポイントが多くもらえます。\n「学習データ」タブで確認できます！',
+  },
+  {
+    icon: '🎉',
+    title: '準備完了！',
+    body: 'さあ、最初のテストを始めましょう！\nわからないことがあればマイページの「チュートリアル」ボタンでいつでも確認できます。',
+  },
+];
+
+let tutorialStep = 0;
+
+function openTutorial() {
+  tutorialStep = 0;
+  renderTutorialStep();
+  document.getElementById('tutorial-overlay').classList.remove('hidden');
+}
+
+function renderTutorialStep() {
+  const step = TUTORIAL_STEPS[tutorialStep];
+  const total = TUTORIAL_STEPS.length;
+  document.getElementById('tutorial-icon').textContent = step.icon;
+  document.getElementById('tutorial-title').textContent = step.title;
+  document.getElementById('tutorial-body').innerHTML = step.body.replace(/\n/g, '<br>');
+  document.getElementById('tutorial-step-text').textContent = `${tutorialStep + 1} / ${total}`;
+
+  const dots = document.getElementById('tutorial-dots');
+  dots.innerHTML = TUTORIAL_STEPS.map((_, i) =>
+    `<div class="tutorial-dot${i === tutorialStep ? ' active' : ''}"></div>`
+  ).join('');
+
+  const nextBtn = document.getElementById('btn-tutorial-next');
+  nextBtn.textContent = tutorialStep === total - 1 ? '始める！' : '次へ →';
+}
+
+function nextTutorialStep() {
+  if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+    tutorialStep++;
+    renderTutorialStep();
+  } else {
+    closeTutorial();
+  }
+}
+
+function closeTutorial() {
+  document.getElementById('tutorial-overlay').classList.add('hidden');
+  if (!state.tutorialDone) {
+    state.tutorialDone = true;
+    saveState();
+  }
+}
+
+document.getElementById('tutorial-overlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('tutorial-overlay')) closeTutorial();
+});
+document.getElementById('btn-tutorial-next').addEventListener('click', nextTutorialStep);
+document.getElementById('btn-tutorial-skip').addEventListener('click', closeTutorial);
+document.getElementById('btn-tutorial-open').addEventListener('click', openTutorial);
+
 // ===== My Page =====
 function openMyPage() {
   // プロフィール表示
@@ -628,7 +832,35 @@ function openMyPage() {
     list.appendChild(item);
   });
 
+  // メモ一覧
+  renderMemoList();
+
   showScreen('screen-mypage');
+}
+
+function renderMemoList() {
+  const list = document.getElementById('memo-list');
+  if (!list) return;
+  const memos = state.memos || {};
+  const entries = Object.entries(memos).filter(([, v]) => v && v.length > 0);
+  if (entries.length === 0) {
+    list.innerHTML = '<p class="empty-memo">まだメモはありません。</p>';
+    return;
+  }
+  // word番号順にソート
+  entries.sort(([a], [b]) => a.localeCompare(b));
+  list.innerHTML = entries.map(([no, memo]) => {
+    const word = WORDS.find(w => w.no === no);
+    if (!word) return '';
+    return `<div class="memo-list-item">
+      <div class="memo-list-word-row">
+        <span class="memo-list-word">${word.word}</span>
+        <span class="memo-list-ja">${word.japanese}</span>
+        <span class="memo-list-no">No.${no}</span>
+      </div>
+      <div class="memo-list-text">${memo}</div>
+    </div>`;
+  }).join('');
 }
 
 // ===== Stats (学習データ) =====
@@ -1108,6 +1340,56 @@ document.querySelectorAll('.detail-tab-btn').forEach(btn => {
   });
 });
 
+// ===== Pronunciation (tap word to speak) =====
+document.getElementById('word-display').addEventListener('click', () => {
+  if (!quiz.current) return;
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(quiz.current.word);
+  utter.lang = 'en-US';
+  utter.rate = 0.85;
+  window.speechSynthesis.speak(utter);
+  // タップ時のフラッシュ演出
+  const el = document.getElementById('word-display');
+  el.classList.add('word-tap-flash');
+  setTimeout(() => el.classList.remove('word-tap-flash'), 300);
+});
+
+// ===== Memo functions (global, called from onclick in dynamic HTML) =====
+function toggleMemoEdit(no) {
+  const editArea = document.getElementById(`memo-edit-${no}`);
+  if (editArea) editArea.classList.toggle('hidden');
+}
+
+function saveMemo(no) {
+  const textarea = document.getElementById(`memo-text-${no}`);
+  if (!textarea) return;
+  const text = textarea.value.trim();
+  if (!state.memos) state.memos = {};
+  if (text) {
+    state.memos[no] = text;
+  } else {
+    delete state.memos[no];
+  }
+  saveState();
+
+  const displayEl = document.getElementById(`memo-display-${no}`);
+  const toggleBtn = document.getElementById(`memo-toggle-btn-${no}`);
+  if (displayEl) {
+    if (text) {
+      displayEl.textContent = text;
+      displayEl.classList.remove('hidden');
+    } else {
+      displayEl.classList.add('hidden');
+    }
+  }
+  if (toggleBtn) {
+    toggleBtn.textContent = text ? '✏️ メモを編集' : '📝 メモを追加';
+  }
+  const editArea = document.getElementById(`memo-edit-${no}`);
+  if (editArea) editArea.classList.add('hidden');
+}
+
 // ===== Navigation =====
 document.getElementById('btn-back-mypage').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
 document.getElementById('btn-edit-name').addEventListener('click', () => {
@@ -1127,6 +1409,8 @@ document.getElementById('btn-back-mode').addEventListener('click', saveQuizAndGo
 document.getElementById('btn-start-resume').addEventListener('click', resumeQuiz);
 document.getElementById('btn-start-normal').addEventListener('click', () => startQuiz('normal'));
 document.getElementById('btn-start-review').addEventListener('click', () => startQuiz('review'));
+document.getElementById('btn-start-lucky').addEventListener('click', () => startQuiz('lucky'));
+document.getElementById('btn-start-review-combined').addEventListener('click', () => startQuiz('review-combined'));
 document.getElementById('btn-complete-home').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
 document.getElementById('btn-complete-retry').addEventListener('click', () => startQuiz(quiz.mode));
 document.getElementById('btn-reset').addEventListener('click', resetState);

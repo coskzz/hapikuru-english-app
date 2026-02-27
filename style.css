@@ -91,8 +91,22 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
   border-radius: 20px; padding: 36px 24px; text-align: center;
   margin-bottom: 24px; box-shadow: 0 6px 20px rgba(255,107,157,.3);
 }
-.word-display { font-size: 2rem; font-weight: bold; color: #fff; letter-spacing: .04em; }
-.word-no { font-size: .8rem; color: rgba(255,255,255,.7); margin-top: 8px; }
+.word-display {
+  font-size: 2rem; font-weight: bold; color: #fff; letter-spacing: .04em;
+  cursor: pointer; user-select: none;
+  transition: opacity .15s;
+}
+.word-display:active, .word-tap-flash { opacity: .7; }
+.word-phonetic {
+  font-size: .9rem; color: rgba(255,255,255,.85);
+  margin-top: 6px; letter-spacing: .03em; font-family: Georgia, serif;
+  min-height: 1.2em;
+}
+.word-tap-hint {
+  font-size: .72rem; color: rgba(255,255,255,.55);
+  margin-top: 4px; letter-spacing: .02em;
+}
+.word-no { font-size: .8rem; color: rgba(255,255,255,.7); margin-top: 6px; }
 
 .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .choice-btn {
@@ -411,9 +425,10 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
 }
 
 .chara-img {
-  width: 80px; height: auto;
-  filter: drop-shadow(2px 4px 8px rgba(0,0,0,.12));
+  width: 90px; height: auto;
   display: block;
+  margin: 0 auto;
+  filter: drop-shadow(2px 4px 8px rgba(0,0,0,.15));
 }
 
 .chara-widget.chara-bounce {
@@ -518,6 +533,256 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
 .mday-badge {
   font-size: .55rem; font-weight: bold; color: #fff;
   border-radius: 6px; padding: 1px 3px; margin-top: 1px; line-height: 1.2;
+}
+
+/* ===== Word Extras (例文・語源・関連語) ===== */
+.word-extras {
+  margin-top: 12px;
+  border-top: 1px solid rgba(255,107,157,.2);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.extras-block {
+  background: #FFFAFC;
+  border: 1px solid #FFE0EE;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: .82rem;
+}
+.extras-label {
+  font-size: .72rem;
+  font-weight: bold;
+  color: #FF6B9D;
+  margin-bottom: 4px;
+  letter-spacing: .04em;
+}
+.extras-example-en {
+  color: #333;
+  font-style: italic;
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+.extras-example-ja {
+  color: #666;
+  font-size: .78rem;
+  line-height: 1.4;
+}
+.extras-body {
+  color: #444;
+  line-height: 1.5;
+}
+.extras-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.extras-related-tag {
+  background: #FFE0EE;
+  color: #C0426E;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: .75rem;
+  font-weight: bold;
+}
+
+/* ===== Mode Select – Lucky/Combined Buttons ===== */
+.btn-lucky-mode {
+  background: linear-gradient(135deg, #FFD580, #FFA500);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity .18s, transform .1s;
+}
+.btn-lucky-mode:active { transform: scale(.97); }
+.btn-combined-mode {
+  background: linear-gradient(135deg, #FF9FCF, #FF6B9D);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity .18s, transform .1s;
+}
+.btn-combined-mode:active { transform: scale(.97); }
+
+/* ===== Tutorial Overlay ===== */
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.tutorial-box {
+  background: #fff;
+  border-radius: 22px;
+  padding: 28px 24px 24px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(255,107,157,.25);
+  animation: popIn .3s cubic-bezier(.4,0,.2,1);
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(.88); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.tutorial-icon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+  display: block;
+}
+.tutorial-title {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #FF6B9D;
+  margin-bottom: 12px;
+}
+.tutorial-body {
+  font-size: .9rem;
+  color: #555;
+  line-height: 1.7;
+  margin-bottom: 20px;
+}
+.tutorial-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.tutorial-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #FFB3D1;
+  transition: background .2s, transform .2s;
+}
+.tutorial-dot.active {
+  background: #FF6B9D;
+  transform: scale(1.3);
+}
+.tutorial-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.tutorial-step-text {
+  font-size: .75rem;
+  color: #bbb;
+  margin-bottom: 4px;
+}
+
+/* ===== Quiz Memo ===== */
+.quiz-memo-area {
+  margin-top: 12px;
+  border-top: 1px solid rgba(255,107,157,.15);
+  padding-top: 10px;
+}
+.quiz-memo-display {
+  background: #FFF8E7;
+  border: 1px solid #FFD97A;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: .85rem;
+  color: #665500;
+  line-height: 1.5;
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+.btn-memo-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1.5px solid #FFD97A;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: .8rem;
+  color: #B08800;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-memo-toggle:hover { background: #FFFBEE; }
+.memo-edit-area {
+  margin-top: 8px;
+}
+.memo-textarea {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #FFD97A;
+  border-radius: 10px;
+  font-size: .88rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 72px;
+  outline: none;
+  background: #FFFDF5;
+  color: #333;
+  transition: border-color .18s;
+}
+.memo-textarea:focus { border-color: #FFA500; }
+.memo-edit-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+/* ===== MyPage Memo List ===== */
+.memo-list {
+  margin-bottom: 24px;
+}
+.memo-list-item {
+  background: #FFFDF5;
+  border: 1.5px solid #FFD97A;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.memo-list-word-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.memo-list-word {
+  font-size: 1rem;
+  font-weight: bold;
+  color: #FF6B9D;
+}
+.memo-list-ja {
+  font-size: .82rem;
+  color: #555;
+}
+.memo-list-no {
+  font-size: .72rem;
+  color: #bbb;
+  margin-left: auto;
+}
+.memo-list-text {
+  font-size: .85rem;
+  color: #554400;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  background: #FFF8E7;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.empty-memo {
+  color: #bbb;
+  font-size: .85rem;
+  padding: 12px 0;
+  text-align: center;
 }
 
 /* ===== Responsive ===== */

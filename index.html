@@ -84,6 +84,8 @@
     <button class="btn btn-resume btn-large hidden" id="btn-start-resume">⏸ 続きから再開</button>
     <button class="btn btn-primary btn-large" id="btn-start-normal">▶ テスト開始（全問）</button>
     <button class="btn btn-review btn-large" id="btn-start-review">⭐ バツのみ復習</button>
+    <button class="btn btn-lucky-mode btn-large" id="btn-start-lucky">🔺 まぐれ正解のみ復習</button>
+    <button class="btn btn-combined-mode btn-large" id="btn-start-review-combined">⭐🔺 バツ＋まぐれ合同復習</button>
   </div>
 </div>
 
@@ -103,6 +105,8 @@
   <div class="progress-text" id="progress-text"></div>
   <div class="quiz-card">
     <div class="word-display" id="word-display"></div>
+    <div class="word-phonetic" id="word-phonetic"></div>
+    <div class="word-tap-hint">🔊 タップで発音</div>
     <div class="word-no" id="word-no"></div>
   </div>
   <div class="choices" id="choices"></div>
@@ -154,6 +158,17 @@
   <!-- セクション別進捗 -->
   <div class="mypage-section-title">📚 セクション別進捗</div>
   <div id="section-progress-list"></div>
+
+  <!-- メモ一覧 -->
+  <div class="mypage-section-title">📝 マイメモ一覧</div>
+  <div id="memo-list" class="memo-list"></div>
+
+  <!-- チュートリアル -->
+  <div class="mypage-section-title">📖 チュートリアル</div>
+  <div class="mypage-feedback-area">
+    <p class="feedback-desc">アプリの使い方を最初から確認できます。</p>
+    <button class="btn btn-secondary btn-small" id="btn-tutorial-open">📖 チュートリアルを見る</button>
+  </div>
 
   <!-- フィードバック -->
   <div class="mypage-section-title">💬 フィードバック</div>
@@ -294,7 +309,8 @@
 <!-- キャラクターウィジェット（クイズ画面以外に表示） -->
 <div id="chara-widget" class="chara-widget hidden">
   <div class="chara-bubble" id="chara-bubble"></div>
-  <img class="chara-img" id="chara-img" src="" alt="先生">
+  <img class="chara-img" id="chara-img" src="" alt=""
+       onerror="this.style.display='none'">
 </div>
 
 <!-- タブバー（全ユーザー） -->
@@ -317,6 +333,21 @@
   </button>
 </div>
 
+<!-- チュートリアルオーバーレイ -->
+<div id="tutorial-overlay" class="tutorial-overlay hidden">
+  <div class="tutorial-box">
+    <span class="tutorial-icon" id="tutorial-icon">👋</span>
+    <div class="tutorial-title" id="tutorial-title"></div>
+    <div class="tutorial-body" id="tutorial-body"></div>
+    <div class="tutorial-step-text" id="tutorial-step-text"></div>
+    <div class="tutorial-dots" id="tutorial-dots"></div>
+    <div class="tutorial-footer">
+      <button class="btn btn-secondary btn-small" id="btn-tutorial-skip">スキップ</button>
+      <button class="btn btn-primary btn-small" id="btn-tutorial-next">次へ →</button>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase compat SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -324,6 +355,8 @@
 
 <script src="firebase-config.js"></script>
 <script src="data.js"></script>
+<script src="phonetics.js"></script>
+<script src="word_extras.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
