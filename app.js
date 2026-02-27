@@ -30,9 +30,16 @@ let adminStudentsMap = {};
 let currentDetailUid = null;
 
 let quiz = {
-  section: null, pool: [], allWords: [], mode: 'normal',
+  section: null, pool: [], allWords: [], mode: 'normal', orderMode: 'random',
   current: null, choices: [], sessionCorrect: 0, sessionWrong: 0, answered: false,
 };
+
+let fc = {
+  pool: [], current: null, index: 0, total: 0,
+  unknownNos: new Set(), section: null, mode: 'normal',
+  tab: 'word', explainOpen: false,
+};
+let lastCompleteType = 'quiz';
 
 // ===== Screens =====
 const SCREEN_TAB = {
@@ -49,7 +56,7 @@ function showScreen(id) {
   updateChara(id);
 
   const bar = document.getElementById('tab-bar');
-  if (id === 'screen-quiz' || !currentUser) {
+  if (id === 'screen-quiz' || id === 'screen-flashcard' || !currentUser) {
     bar.classList.add('hidden');
     document.body.classList.remove('has-tab-bar');
   } else {
@@ -82,7 +89,7 @@ const CHARA_CONFIG = {
   'screen-stats':    { pose: 'study', msgs: ['コツコツが大切！', '記録が力になるよ！', '続けることが大事！'] },
   'screen-mypage':   { pose: 'think', msgs: ['コツコツが大切！', '振り返りが力になるよ！', '継続は力なり！'] },
 };
-const CHARA_HIDDEN = new Set(['screen-quiz', 'screen-loading', 'screen-login', 'screen-admin']);
+const CHARA_HIDDEN = new Set(['screen-quiz', 'screen-flashcard', 'screen-loading', 'screen-login', 'screen-admin']);
 
 function updateChara(screenId) {
   const widget = document.getElementById('chara-widget');
@@ -413,20 +420,24 @@ function startQuiz(mode) {
   const allWords = wordsForSection(quiz.section.id);
   quiz.allWords = allWords;
 
+  const applyOrder = arr => quiz.orderMode === 'sequential'
+    ? [...arr].sort((a, b) => a.no.localeCompare(b.no))
+    : shuffle(arr);
+
   if (mode === 'review') {
-    quiz.pool = shuffle(allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0));
+    quiz.pool = applyOrder(allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0));
   } else if (mode === 'lucky') {
-    quiz.pool = shuffle(allWords.filter(w => state.records[w.no]?.lucky === true));
+    quiz.pool = applyOrder(allWords.filter(w => state.records[w.no]?.lucky === true));
   } else if (mode === 'review-combined') {
-    quiz.pool = shuffle(allWords.filter(w =>
+    quiz.pool = applyOrder(allWords.filter(w =>
       (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.lucky === true
     ));
   } else {
-    quiz.pool = shuffle(allWords.filter(w => !state.records[w.no]?.correct));
+    quiz.pool = applyOrder(allWords.filter(w => !state.records[w.no]?.correct));
     if (quiz.pool.length === 0) {
       allWords.forEach(w => { if (state.records[w.no]) state.records[w.no].correct = false; });
       saveState();
-      quiz.pool = shuffle(allWords);
+      quiz.pool = applyOrder(allWords);
     }
   }
   if (quiz.pool.length === 0) { alert('出題できる単語がありません。'); return; }
@@ -682,7 +693,10 @@ function resumeQuiz() {
 
 // ===== Complete =====
 function showComplete() {
+  lastCompleteType = 'quiz';
   localStorage.removeItem('quiz_resume');
+  document.getElementById('btn-complete-retry').textContent = 'もう一度';
+  document.getElementById('btn-fc-retry-unknown').classList.add('hidden');
   const total = quiz.sessionCorrect + quiz.sessionWrong;
   const pct   = total > 0 ? Math.round((quiz.sessionCorrect / total) * 100) : 0;
   const { correct: allCorrect, total: allTotal } = getSectionStats(quiz.section.id);
@@ -1412,7 +1426,13 @@ document.getElementById('btn-start-review').addEventListener('click', () => star
 document.getElementById('btn-start-lucky').addEventListener('click', () => startQuiz('lucky'));
 document.getElementById('btn-start-review-combined').addEventListener('click', () => startQuiz('review-combined'));
 document.getElementById('btn-complete-home').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
-document.getElementById('btn-complete-retry').addEventListener('click', () => startQuiz(quiz.mode));
+document.getElementById('btn-complete-retry').addEventListener('click', () => {
+  if (lastCompleteType === 'flashcard') {
+    startFlashcard(fc.mode === 'retry' ? 'normal' : fc.mode);
+  } else {
+    startQuiz(quiz.mode);
+  }
+});
 document.getElementById('btn-reset').addEventListener('click', resetState);
 
 // ===== Bottom Tab Bar =====
@@ -1428,6 +1448,218 @@ document.getElementById('tab-mypage').addEventListener('click', () => {
 document.getElementById('tab-admin').addEventListener('click', () => {
   showScreen('screen-admin'); loadAdminData();
 });
+
+// ===== Flashcard =====
+function startFlashcard(mode) {
+  fc.mode    = mode;
+  fc.section = quiz.section;
+  fc.unknownNos = new Set();
+  fc.tab     = 'word';
+  fc.explainOpen = false;
+  fc.index   = 0;
+
+  const allWords = wordsForSection(fc.section.id);
+  const applyOrder = arr => quiz.orderMode === 'sequential'
+    ? [...arr].sort((a, b) => a.no.localeCompare(b.no))
+    : shuffle(arr);
+
+  let raw;
+  if (mode === 'review')  raw = allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0);
+  else if (mode === 'lucky') raw = allWords.filter(w => state.records[w.no]?.lucky === true);
+  else raw = allWords;
+
+  fc.pool  = applyOrder(raw);
+  if (fc.pool.length === 0) { alert('出題できる単語がありません。'); return; }
+  fc.total = fc.pool.length;
+
+  document.getElementById('fc-section-label').textContent = fc.section.label;
+  showScreen('screen-flashcard');
+  renderFCCard();
+}
+
+function renderFCCard() {
+  if (fc.index >= fc.pool.length) { showFCComplete(); return; }
+
+  fc.current     = fc.pool[fc.index];
+  fc.explainOpen = false;
+  document.getElementById('fc-explain-panel').classList.add('hidden');
+  document.getElementById('fc-btn-explain').textContent = '解説';
+
+  const pct = Math.round((fc.index / fc.total) * 100);
+  document.getElementById('fc-progress-bar').style.width = pct + '%';
+  document.getElementById('fc-counter').textContent = `${fc.index + 1} / ${fc.total}`;
+  document.getElementById('fc-wordno').textContent   = `No.${fc.current.no}`;
+
+  document.querySelectorAll('.fc-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.fcTab === fc.tab);
+  });
+  renderFCContent();
+}
+
+function renderFCContent() {
+  const mainEl     = document.getElementById('fc-main');
+  const phoneticEl = document.getElementById('fc-phonetic');
+  const extras  = (typeof WORD_EXTRAS !== 'undefined') ? WORD_EXTRAS[fc.current.word.toLowerCase()]   : null;
+  const phonetic = (typeof PHONETICS  !== 'undefined') ? PHONETICS[fc.current.word.toLowerCase()]    : null;
+
+  phoneticEl.textContent = '';
+  switch (fc.tab) {
+    case 'word':
+      mainEl.className = 'fc-word-en';
+      mainEl.textContent = fc.current.word;
+      if (phonetic) phoneticEl.textContent = phonetic;
+      break;
+    case 'word-ja':
+      mainEl.className = 'fc-word-ja';
+      mainEl.textContent = fc.current.japanese;
+      break;
+    case 'example':
+      if (extras?.example) {
+        mainEl.className = 'fc-example-en';
+        mainEl.textContent = extras.example.split('\n')[0] || fc.current.word;
+      } else {
+        mainEl.className = 'fc-word-en';
+        mainEl.textContent = fc.current.word;
+      }
+      break;
+    case 'example-ja':
+      if (extras?.example) {
+        mainEl.className = 'fc-example-ja';
+        const line = extras.example.split('\n')[1] || fc.current.japanese;
+        mainEl.textContent = line.replace(/^[（(]|[）)]$/g, '');
+      } else {
+        mainEl.className = 'fc-word-ja';
+        mainEl.textContent = fc.current.japanese;
+      }
+      break;
+  }
+}
+
+function fcSwitchTab(tab) {
+  fc.tab = tab;
+  document.querySelectorAll('.fc-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.fcTab === tab);
+  });
+  renderFCContent();
+}
+
+function fcToggleExplain() {
+  const panel = document.getElementById('fc-explain-panel');
+  const btn   = document.getElementById('fc-btn-explain');
+  fc.explainOpen = !fc.explainOpen;
+  if (fc.explainOpen) {
+    const extras = (typeof WORD_EXTRAS !== 'undefined') ? WORD_EXTRAS[fc.current.word.toLowerCase()] : null;
+    const pos = getPos(fc.current.word, fc.current.japanese);
+    let html = `<div class="extras-label">${fc.current.word} <span class="pos-badge">${pos}</span> = ${fc.current.japanese}</div>`;
+    if (extras?.etymology) {
+      html += `<div class="extras-block" style="margin-top:8px">
+        <div class="extras-label">🔤 語源</div>
+        <div class="extras-body">${extras.etymology}</div>
+      </div>`;
+    }
+    if (extras?.related?.length) {
+      html += `<div class="extras-block" style="margin-top:8px">
+        <div class="extras-label">🔗 関連語</div>
+        <div class="extras-related">${extras.related.map(r => `<span class="extras-related-tag">${r}</span>`).join('')}</div>
+      </div>`;
+    }
+    const memo = (state.memos || {})[fc.current.no];
+    if (memo) {
+      html += `<div class="quiz-memo-display" style="margin-top:8px">${memo}</div>`;
+    }
+    panel.innerHTML = html;
+    panel.classList.remove('hidden');
+    btn.textContent = '解説▲';
+  } else {
+    panel.classList.add('hidden');
+    btn.textContent = '解説';
+  }
+}
+
+function fcMark(known) {
+  if (!known) fc.unknownNos.add(fc.current.no);
+  fc.index++;
+  renderFCCard();
+}
+
+function showFCComplete() {
+  lastCompleteType = 'flashcard';
+  const unknownCount = fc.unknownNos.size;
+  const knownCount   = fc.total - unknownCount;
+
+  document.getElementById('complete-title').textContent = '🃏 フラッシュカード完了！';
+  document.getElementById('complete-stats').innerHTML = `
+    <strong>わかった:</strong> ${knownCount} 語<br>
+    <strong>わからない:</strong> ${unknownCount} 語<br>
+    <strong>合計:</strong> ${fc.total} 語
+  `;
+  document.getElementById('btn-complete-retry').textContent = 'もう一度（全問）';
+
+  const unknownBtn = document.getElementById('btn-fc-retry-unknown');
+  if (unknownCount > 0) {
+    unknownBtn.textContent = `⭐ わからない ${unknownCount} 語を再テスト`;
+    unknownBtn.classList.remove('hidden');
+  } else {
+    unknownBtn.classList.add('hidden');
+  }
+  showScreen('screen-complete');
+}
+
+function fcRetryUnknown() {
+  const unknownWords = fc.pool.filter(w => fc.unknownNos.has(w.no));
+  if (unknownWords.length === 0) return;
+
+  const sorted = quiz.orderMode === 'sequential'
+    ? [...unknownWords].sort((a, b) => a.no.localeCompare(b.no))
+    : shuffle([...unknownWords]);
+
+  fc.pool        = sorted;
+  fc.total       = fc.pool.length;
+  fc.index       = 0;
+  fc.unknownNos  = new Set();
+  fc.tab         = 'word';
+  fc.explainOpen = false;
+  fc.mode        = 'retry';
+
+  showScreen('screen-flashcard');
+  renderFCCard();
+}
+
+// ===== Order Toggle =====
+document.getElementById('order-toggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('.order-btn');
+  if (!btn) return;
+  document.querySelectorAll('.order-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  quiz.orderMode = btn.dataset.order;
+});
+
+// ===== Flashcard Events =====
+document.getElementById('btn-start-flashcard').addEventListener('click', () => startFlashcard('normal'));
+
+document.getElementById('btn-fc-retry-unknown').addEventListener('click', fcRetryUnknown);
+
+document.getElementById('fc-tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.fc-tab');
+  if (!tab) return;
+  fcSwitchTab(tab.dataset.fcTab);
+});
+
+document.getElementById('fc-btn-explain').addEventListener('click', fcToggleExplain);
+
+document.getElementById('fc-btn-play').addEventListener('click', () => {
+  if (!fc.current || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(fc.current.word);
+  utter.lang = 'en-US';
+  utter.rate = 0.85;
+  window.speechSynthesis.speak(utter);
+});
+
+document.getElementById('fc-btn-unknown').addEventListener('click', () => fcMark(false));
+document.getElementById('fc-btn-known').addEventListener('click',   () => fcMark(true));
+
+document.getElementById('btn-back-fc').addEventListener('click', () => openMode(quiz.section));
 
 document.getElementById('btn-review-all').addEventListener('click', () => {
   const allWrong = WORDS.filter(w => w.japanese && (state.records[w.no]?.wrongCount || 0) > 0);

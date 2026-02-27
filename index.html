@@ -80,12 +80,25 @@
     <h2 id="mode-section-title"></h2>
   </div>
   <div class="mode-stats" id="mode-stats"></div>
+
+  <!-- 出題順序 -->
+  <div class="order-mode-area">
+    <div class="order-mode-label">📋 出題順序</div>
+    <div class="order-toggle" id="order-toggle">
+      <button class="order-btn active" data-order="random">🔀 ランダム</button>
+      <button class="order-btn" data-order="sequential">📋 順番通り</button>
+    </div>
+  </div>
+
   <div class="mode-buttons">
+    <div class="mode-section-label">── 4択テスト ──</div>
     <button class="btn btn-resume btn-large hidden" id="btn-start-resume">⏸ 続きから再開</button>
     <button class="btn btn-primary btn-large" id="btn-start-normal">▶ テスト開始（全問）</button>
     <button class="btn btn-review btn-large" id="btn-start-review">⭐ バツのみ復習</button>
     <button class="btn btn-lucky-mode btn-large" id="btn-start-lucky">🔺 まぐれ正解のみ復習</button>
     <button class="btn btn-combined-mode btn-large" id="btn-start-review-combined">⭐🔺 バツ＋まぐれ合同復習</button>
+    <div class="mode-section-label">── フラッシュカード ──</div>
+    <button class="btn btn-flashcard btn-large" id="btn-start-flashcard">🃏 フラッシュカードモード</button>
   </div>
 </div>
 
@@ -121,9 +134,56 @@
     <h2 id="complete-title"></h2>
     <div class="complete-stats" id="complete-stats"></div>
     <div class="complete-buttons">
+      <button class="btn btn-review hidden" id="btn-fc-retry-unknown">⭐ わからないのみ再テスト</button>
       <button class="btn btn-primary" id="btn-complete-retry">もう一度</button>
       <button class="btn btn-secondary" id="btn-complete-home">ホームへ</button>
     </div>
+  </div>
+</div>
+
+<!-- フラッシュカード画面 -->
+<div id="screen-flashcard" class="screen">
+  <div class="quiz-header">
+    <button class="back-btn" id="btn-back-fc">← 戻る</button>
+    <div class="quiz-info">
+      <span id="fc-section-label"></span>
+      <span>🃏 フラッシュカード</span>
+    </div>
+  </div>
+  <div class="progress-bar-wrap">
+    <div class="progress-bar" id="fc-progress-bar"></div>
+  </div>
+
+  <!-- タブ -->
+  <div class="fc-tabs" id="fc-tabs">
+    <button class="fc-tab" data-fc-tab="example">例文</button>
+    <button class="fc-tab active" data-fc-tab="word">単語</button>
+    <button class="fc-tab" data-fc-tab="example-ja">例文訳</button>
+    <button class="fc-tab" data-fc-tab="word-ja">単語訳</button>
+  </div>
+
+  <div class="fc-counter" id="fc-counter"></div>
+
+  <!-- コンテンツエリア -->
+  <div class="fc-content">
+    <div id="fc-main" class="fc-word-en"></div>
+    <div class="fc-phonetic" id="fc-phonetic"></div>
+    <div class="fc-wordno" id="fc-wordno"></div>
+  </div>
+
+  <!-- 解説パネル（トグル） -->
+  <div class="fc-explain-panel hidden" id="fc-explain-panel"></div>
+
+  <!-- 右寄せアクション -->
+  <div class="fc-actions">
+    <button class="btn btn-secondary btn-small" id="fc-btn-explain">解説</button>
+    <button class="fc-play-btn" id="fc-btn-play">▶</button>
+  </div>
+
+  <!-- 下部ボタン -->
+  <div class="fc-bottom">
+    <button class="fc-btn-unknown" id="fc-btn-unknown">わからない</button>
+    <button class="fc-btn-known" id="fc-btn-known">わかる</button>
   </div>
 </div>
 

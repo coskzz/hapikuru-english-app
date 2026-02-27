@@ -785,6 +785,198 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
   text-align: center;
 }
 
+/* ===== Order Toggle (Mode Screen) ===== */
+.order-mode-area {
+  background: #FFF5FA;
+  border: 1.5px solid #FFE0EE;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+.order-mode-label {
+  font-size: .78rem;
+  font-weight: bold;
+  color: #FF6B9D;
+  margin-bottom: 8px;
+}
+.order-toggle {
+  display: flex;
+  gap: 6px;
+  background: #f0f0f0;
+  border-radius: 20px;
+  padding: 3px;
+}
+.order-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 6px;
+  font-size: .82rem;
+  color: #888;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all .18s;
+}
+.order-btn.active {
+  background: #FF6B9D;
+  color: #fff;
+}
+.mode-section-label {
+  text-align: center;
+  font-size: .72rem;
+  color: #bbb;
+  font-weight: bold;
+  letter-spacing: .1em;
+  padding: 2px 0 4px;
+}
+.btn-flashcard {
+  background: linear-gradient(135deg, #7C6CF5, #5A52C8);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+}
+.btn-flashcard:active { transform: scale(.97); }
+
+/* ===== Flashcard Screen ===== */
+.fc-tabs {
+  display: flex;
+  gap: 4px;
+  background: #f0f0f0;
+  border-radius: 30px;
+  padding: 4px;
+  margin: 10px 0 12px;
+}
+.fc-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: 24px;
+  padding: 8px 2px;
+  font-size: .78rem;
+  color: #888;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all .18s;
+  white-space: nowrap;
+}
+.fc-tab.active {
+  background: #222;
+  color: #fff;
+}
+.fc-counter {
+  font-size: .82rem;
+  color: #aaa;
+  margin-bottom: 16px;
+}
+.fc-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 0;
+  min-height: 160px;
+}
+.fc-word-en {
+  font-size: 2.2rem;
+  font-weight: bold;
+  color: #333;
+  line-height: 1.3;
+  word-break: break-word;
+}
+.fc-word-ja {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #555;
+  line-height: 1.4;
+}
+.fc-example-en {
+  font-size: .98rem;
+  font-style: italic;
+  color: #444;
+  line-height: 1.8;
+}
+.fc-example-ja {
+  font-size: .95rem;
+  color: #555;
+  line-height: 1.8;
+}
+.fc-phonetic {
+  font-size: .9rem;
+  color: #aaa;
+  margin-top: 8px;
+  font-family: Georgia, serif;
+  min-height: 1.2em;
+}
+.fc-wordno {
+  font-size: .72rem;
+  color: #ccc;
+  margin-top: 6px;
+}
+.fc-explain-panel {
+  background: #FFFAFC;
+  border: 1px solid #FFE0EE;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  font-size: .82rem;
+  overflow-y: auto;
+  max-height: 200px;
+  animation: fadeIn .18s;
+}
+.fc-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.fc-play-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: #222;
+  color: #fff;
+  border: none;
+  font-size: .95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity .15s;
+  flex-shrink: 0;
+}
+.fc-play-btn:active { opacity: .7; }
+.fc-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.fc-btn-unknown {
+  padding: 15px;
+  border: 2px solid #ddd;
+  border-radius: 30px;
+  background: #fff;
+  color: #666;
+  font-size: .95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all .15s;
+}
+.fc-btn-unknown:active { background: #f0f0f0; }
+.fc-btn-known {
+  padding: 15px;
+  border: 2px solid #222;
+  border-radius: 30px;
+  background: #222;
+  color: #fff;
+  font-size: .95rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all .15s;
+}
+.fc-btn-known:active { opacity: .8; }
+
 /* ===== Responsive ===== */
 @media (max-width: 360px) {
   .word-display { font-size: 1.6rem; }
