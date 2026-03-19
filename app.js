@@ -25,6 +25,7 @@ const SECTIONS = [
 let currentUser  = null;
 let userRole     = 'student';
 let userName     = '';
+let userId       = '';
 let state        = { records: {}, dailyLog: {}, streak: 0, bestStreak: 0, points: 0, lastStudyDate: null, tutorialDone: false, memos: {} };
 let adminStudentsMap = {};
 let currentDetailUid = null;
@@ -153,8 +154,9 @@ async function loadUserData(uid) {
   const doc = await db.collection('users').doc(uid).get();
   if (doc.exists) {
     const d = doc.data();
-    userRole  = d.role  || 'student';
-    userName  = d.name  || currentUser.email;
+    userRole  = d.role   || 'student';
+    userName  = d.name   || '';
+    userId    = d.userId || '';
     state.records       = d.records       || {};
     state.dailyLog      = d.dailyLog      || {};
     state.streak        = d.streak        || 0;
@@ -231,16 +233,21 @@ auth.onAuthStateChanged(async (user) => {
   }
 });
 
+// ===== ID → ダミーメール変換 =====
+function idToEmail(id) {
+  return id.toLowerCase().replace(/\s+/g, '_') + '@hapikuru.local';
+}
+
 // ===== Login =====
 document.getElementById('btn-login').addEventListener('click', async () => {
-  const email    = document.getElementById('login-email').value.trim();
+  const userId   = document.getElementById('login-id').value.trim();
   const password = document.getElementById('login-password').value;
   const errEl    = document.getElementById('login-error');
   errEl.classList.add('hidden');
-  if (!email || !password) { showAuthError(errEl, 'メールアドレスとパスワードを入力してください。'); return; }
+  if (!userId || !password) { showAuthError(errEl, 'IDとパスワードを入力してください。'); return; }
   try {
     document.getElementById('btn-login').textContent = '...';
-    await auth.signInWithEmailAndPassword(email, password);
+    await auth.signInWithEmailAndPassword(idToEmail(userId), password);
   } catch (e) {
     document.getElementById('btn-login').textContent = 'ログイン';
     showAuthError(errEl, authErrorMsg(e.code));
@@ -250,18 +257,18 @@ document.getElementById('btn-login').addEventListener('click', async () => {
 // ===== Signup =====
 document.getElementById('btn-signup').addEventListener('click', async () => {
   const name     = document.getElementById('signup-name').value.trim();
-  const email    = document.getElementById('signup-email').value.trim();
+  const userId   = document.getElementById('signup-id').value.trim();
   const password = document.getElementById('signup-password').value;
   const errEl    = document.getElementById('signup-error');
   errEl.classList.add('hidden');
-  if (!name)     { showAuthError(errEl, 'お名前を入力してください。'); return; }
-  if (!email)    { showAuthError(errEl, 'メールアドレスを入力してください。'); return; }
+  if (!name)               { showAuthError(errEl, 'お名前を入力してください。'); return; }
+  if (!userId)             { showAuthError(errEl, 'IDを入力してください。'); return; }
   if (password.length < 6) { showAuthError(errEl, 'パスワードは6文字以上で入力してください。'); return; }
   try {
     document.getElementById('btn-signup').textContent = '...';
-    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    const cred = await auth.createUserWithEmailAndPassword(idToEmail(userId), password);
     await db.collection('users').doc(cred.user.uid).set({
-      name, email, role: 'student', records: {},
+      name, userId, password, role: 'student', records: {},
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
   } catch (e) {
@@ -284,11 +291,11 @@ function showAuthError(el, msg) {
 }
 function authErrorMsg(code) {
   const map = {
-    'auth/user-not-found':       'メールアドレスが見つかりません。',
+    'auth/user-not-found':       'IDが見つかりません。',
     'auth/wrong-password':       'パスワードが間違っています。',
-    'auth/invalid-credential':   'メールアドレスまたはパスワードが正しくありません。',
-    'auth/email-already-in-use': 'このメールアドレスはすでに使用されています。',
-    'auth/invalid-email':        'メールアドレスの形式が正しくありません。',
+    'auth/invalid-credential':   'IDまたはパスワードが正しくありません。',
+    'auth/email-already-in-use': 'このIDはすでに使用されています。',
+    'auth/invalid-email':        'IDの形式が正しくありません。',
     'auth/weak-password':        'パスワードは6文字以上で設定してください。',
     'auth/too-many-requests':    'ログイン試行回数が多すぎます。しばらく待ってから試してください。',
   };
@@ -388,6 +395,13 @@ function openMode(sec) {
   combinedBtn.disabled = combinedLen === 0;
   combinedBtn.style.opacity = combinedLen === 0 ? '.4' : '1';
 
+  const fcReviewWords = words.filter(w =>
+    (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.fcUnknown === true
+  );
+  const fcReviewBtn = document.getElementById('btn-start-flashcard-review');
+  fcReviewBtn.disabled = fcReviewWords.length === 0;
+  fcReviewBtn.style.opacity = fcReviewWords.length === 0 ? '.4' : '1';
+
   // 続きから再開ボタン
   const resumeBtn = document.getElementById('btn-start-resume');
   const saved = getSavedQuiz();
@@ -441,6 +455,7 @@ function startQuiz(mode) {
     }
   }
   if (quiz.pool.length === 0) { alert('出題できる単語がありません。'); return; }
+  quiz.totalPool = quiz.pool.length;
   document.getElementById('quiz-section-label').textContent = quiz.section.label;
   const modeLabels = { review: '⭐ バツ復習', lucky: '🔺 まぐれ復習', 'review-combined': '⭐🔺 バツ+まぐれ復習' };
   document.getElementById('quiz-mode-label').textContent = modeLabels[mode] || '通常テスト';
@@ -453,12 +468,8 @@ function nextQuestion() {
   quiz.current  = quiz.pool.shift();
   quiz.answered = false;
 
-  const total = quiz.mode === 'review'
-    ? quiz.allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0).length
-    : quiz.mode === 'lucky'
-    ? quiz.allWords.filter(w => state.records[w.no]?.lucky === true).length
-    : quiz.mode === 'review-combined'
-    ? quiz.allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.lucky === true).length
+  const total = (quiz.mode === 'review' || quiz.mode === 'lucky' || quiz.mode === 'review-combined')
+    ? quiz.totalPool
     : quiz.allWords.length;
   const done = quiz.sessionCorrect + quiz.sessionWrong;
   const pct  = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -740,7 +751,7 @@ const TUTORIAL_STEPS = [
   },
   {
     icon: '🔥',
-    title: 'ストリークを伸ばそう',
+    title: '毎日続けてポイントゲット！',
     body: '毎日テストを続けると連続学習日数が増えてポイントが多くもらえます。\n「学習データ」タブで確認できます！',
   },
   {
@@ -803,7 +814,7 @@ document.getElementById('btn-tutorial-open').addEventListener('click', openTutor
 function openMyPage() {
   // プロフィール表示
   document.getElementById('profile-name-text').textContent = userName;
-  document.getElementById('profile-email').textContent = currentUser.email;
+  document.getElementById('profile-email').textContent = userId ? `ID: ${userId}` : '';
   document.getElementById('profile-name-display').classList.remove('hidden');
   document.getElementById('profile-name-edit').classList.add('hidden');
 
@@ -1164,7 +1175,7 @@ function renderAdminTable(students) {
     const updatedAt    = student.updatedAt?.toDate ? student.updatedAt.toDate().toLocaleDateString('ja-JP') : '—';
 
     html += `<tr>
-      <td class="col-name col-name-link" onclick="openStudentDetail('${student.uid}')"><strong>${student.name || '—'}</strong><br><small>${student.email || ''}</small></td>
+      <td class="col-name col-name-link" onclick="openStudentDetail('${student.uid}')"><strong>${student.name || '—'}</strong><br><small>${student.userId ? 'ID: ' + student.userId : ''}</small></td>
     `;
 
     SECTIONS.forEach(sec => {
@@ -1202,13 +1213,35 @@ function openStudentDetail(uid) {
   adminCalViewDate  = new Date(); // 当月にリセット
 
   document.getElementById('detail-student-name').textContent = student.name || '—';
-  document.getElementById('detail-student-email').textContent = student.email || '';
+
+  // ログイン情報（ID・パスワード）
+  document.getElementById('detail-student-id').textContent = student.userId || '—';
+  const pwEl = document.getElementById('detail-student-pw');
+  pwEl.textContent = '●●●●●●';
+  pwEl.dataset.pw = student.password || '（未登録）';
+  pwEl.dataset.visible = 'false';
+  document.getElementById('btn-pw-toggle').textContent = '表示';
 
   document.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('detail-tab-calendar').classList.add('active');
 
   renderCalendarView(student.dailyLog || {}, document.getElementById('detail-body'));
   document.getElementById('student-detail-modal').classList.remove('hidden');
+}
+
+// パスワード表示切替
+function toggleDetailPw() {
+  const pwEl  = document.getElementById('detail-student-pw');
+  const btnEl = document.getElementById('btn-pw-toggle');
+  if (pwEl.dataset.visible === 'true') {
+    pwEl.textContent    = '●●●●●●';
+    pwEl.dataset.visible = 'false';
+    btnEl.textContent   = '表示';
+  } else {
+    pwEl.textContent    = pwEl.dataset.pw;
+    pwEl.dataset.visible = 'true';
+    btnEl.textContent   = '隠す';
+  }
 }
 
 // 月カレンダーナビゲーション（onclick属性から呼ばれる）
@@ -1325,12 +1358,71 @@ function renderLineChart(dailyLog, container) {
 function setupAdminSearch(students) {
   document.getElementById('admin-search').addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
-    const filtered = q ? students.filter(s => (s.name || '').toLowerCase().includes(q) || (s.email || '').includes(q)) : students;
+    const filtered = q ? students.filter(s => (s.name || '').toLowerCase().includes(q) || (s.userId || '').toLowerCase().includes(q)) : students;
     renderAdminTable(filtered);
   });
 }
 
 document.getElementById('btn-admin-refresh').addEventListener('click', loadAdminData);
+
+// ===== Admin Tab =====
+function switchAdminTab(tab) {
+  const isStudents = tab === 'students';
+  document.getElementById('admin-panel-students').classList.toggle('hidden', !isStudents);
+  document.getElementById('admin-panel-words').classList.toggle('hidden', isStudents);
+  document.getElementById('admin-tab-students').classList.toggle('active', isStudents);
+  document.getElementById('admin-tab-words').classList.toggle('active', !isStudents);
+  if (!isStudents) renderAdminWordList();
+}
+
+// ===== Admin Word List =====
+function renderAdminWordList() {
+  const searchVal = (document.getElementById('admin-word-search').value || '').trim().toLowerCase();
+  const sectionFilter = document.getElementById('admin-word-section-filter').value;
+
+  const filtered = WORDS.filter(w => {
+    if (!w.japanese) return false;
+    if (sectionFilter && w.section !== sectionFilter) return false;
+    if (searchVal) {
+      return w.word.toLowerCase().includes(searchVal) || w.japanese.includes(searchVal) || w.no.includes(searchVal);
+    }
+    return true;
+  });
+
+  document.getElementById('admin-word-count').textContent = `${filtered.length} 語 表示中（全 ${WORDS.filter(w => w.japanese).length} 語）`;
+
+  if (filtered.length === 0) {
+    document.getElementById('admin-word-list-wrap').innerHTML = '<p class="loading-text">該当する単語がありません。</p>';
+    return;
+  }
+
+  // セクション別にグループ化
+  const bySection = {};
+  filtered.forEach(w => {
+    if (!bySection[w.section]) bySection[w.section] = [];
+    bySection[w.section].push(w);
+  });
+
+  let html = '';
+  SECTIONS.forEach(sec => {
+    const words = bySection[sec.id];
+    if (!words || words.length === 0) return;
+    html += `<div class="word-list-section">
+      <div class="word-list-section-header">${sec.label} <span class="word-list-section-range">${sec.range}</span><span class="word-list-section-count">${words.length}語</span></div>
+      <table class="word-list-table">
+        <thead><tr><th class="wl-no">No.</th><th class="wl-en">英単語</th><th class="wl-ja">日本語訳</th></tr></thead>
+        <tbody>`;
+    words.forEach(w => {
+      html += `<tr><td class="wl-no">${w.no}</td><td class="wl-en">${w.word}</td><td class="wl-ja">${w.japanese}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  });
+
+  document.getElementById('admin-word-list-wrap').innerHTML = html;
+}
+
+document.getElementById('admin-word-search').addEventListener('input', renderAdminWordList);
+document.getElementById('admin-word-section-filter').addEventListener('change', renderAdminWordList);
 
 // Student detail modal events
 document.getElementById('btn-close-detail').addEventListener('click', () => {
@@ -1464,7 +1556,7 @@ function startFlashcard(mode) {
     : shuffle(arr);
 
   let raw;
-  if (mode === 'review')  raw = allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0);
+  if (mode === 'review')  raw = allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.fcUnknown === true);
   else if (mode === 'lucky') raw = allWords.filter(w => state.records[w.no]?.lucky === true);
   else raw = allWords;
 
@@ -1578,12 +1670,18 @@ function fcToggleExplain() {
 
 function fcMark(known) {
   if (!known) fc.unknownNos.add(fc.current.no);
+  // わかった/わからないをrecordに永続化
+  if (!state.records[fc.current.no]) {
+    state.records[fc.current.no] = { correct: false, attempts: 0, wrongCount: 0, lucky: false };
+  }
+  state.records[fc.current.no].fcUnknown = !known;
   fc.index++;
   renderFCCard();
 }
 
 function showFCComplete() {
   lastCompleteType = 'flashcard';
+  saveRecords();  // わかった/わからないをFirestoreに保存
   const unknownCount = fc.unknownNos.size;
   const knownCount   = fc.total - unknownCount;
 
@@ -1636,6 +1734,7 @@ document.getElementById('order-toggle').addEventListener('click', (e) => {
 
 // ===== Flashcard Events =====
 document.getElementById('btn-start-flashcard').addEventListener('click', () => startFlashcard('normal'));
+document.getElementById('btn-start-flashcard-review').addEventListener('click', () => startFlashcard('review'));
 
 document.getElementById('btn-fc-retry-unknown').addEventListener('click', fcRetryUnknown);
 

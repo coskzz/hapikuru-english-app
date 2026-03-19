@@ -27,7 +27,7 @@
     <!-- ログインフォーム -->
     <div id="form-login" class="auth-form">
       <h2 class="auth-title">ログイン</h2>
-      <input type="email" id="login-email" class="auth-input" placeholder="メールアドレス" autocomplete="email">
+      <input type="text" id="login-id" class="auth-input" placeholder="ID" autocomplete="username">
       <input type="password" id="login-password" class="auth-input" placeholder="パスワード" autocomplete="current-password">
       <div class="auth-error hidden" id="login-error"></div>
       <button class="btn btn-primary btn-full" id="btn-login">ログイン</button>
@@ -40,7 +40,7 @@
     <div id="form-signup" class="auth-form hidden">
       <h2 class="auth-title">新規登録</h2>
       <input type="text" id="signup-name" class="auth-input" placeholder="お名前（例：田中 太郎）" autocomplete="name">
-      <input type="email" id="signup-email" class="auth-input" placeholder="メールアドレス" autocomplete="email">
+      <input type="text" id="signup-id" class="auth-input" placeholder="ID（半角英数字推奨）" autocomplete="username">
       <input type="password" id="signup-password" class="auth-input" placeholder="パスワード（6文字以上）" autocomplete="new-password">
       <div class="auth-error hidden" id="signup-error"></div>
       <button class="btn btn-primary btn-full" id="btn-signup">登録する</button>
@@ -99,6 +99,7 @@
     <button class="btn btn-combined-mode btn-large" id="btn-start-review-combined">⭐🔺 バツ＋まぐれ合同復習</button>
     <div class="mode-section-label">── フラッシュカード ──</div>
     <button class="btn btn-flashcard btn-large" id="btn-start-flashcard">🃏 フラッシュカードモード</button>
+    <button class="btn btn-flashcard-review btn-large" id="btn-start-flashcard-review">🃏⭐ わからない語のみ復習</button>
   </div>
 </div>
 
@@ -253,15 +254,42 @@
     <button id="btn-admin-logout" class="btn btn-secondary btn-small">ログアウト</button>
   </div>
 
-  <div class="admin-stats-bar" id="admin-stats-bar"></div>
-
-  <div class="admin-toolbar">
-    <input type="text" id="admin-search" class="admin-search" placeholder="生徒名で検索...">
-    <button class="btn btn-secondary btn-small" id="btn-admin-refresh">🔄 更新</button>
+  <!-- 管理画面タブ -->
+  <div class="admin-tab-bar">
+    <button class="admin-tab-btn active" id="admin-tab-students" onclick="switchAdminTab('students')">👥 生徒一覧</button>
+    <button class="admin-tab-btn" id="admin-tab-words" onclick="switchAdminTab('words')">📚 単語一覧</button>
   </div>
 
-  <div id="admin-table-wrap">
-    <p class="loading-text">データを読み込み中...</p>
+  <!-- 生徒一覧パネル -->
+  <div id="admin-panel-students">
+    <div class="admin-stats-bar" id="admin-stats-bar"></div>
+    <div class="admin-toolbar">
+      <input type="text" id="admin-search" class="admin-search" placeholder="生徒名・IDで検索...">
+      <button class="btn btn-secondary btn-small" id="btn-admin-refresh">🔄 更新</button>
+    </div>
+    <div id="admin-table-wrap">
+      <p class="loading-text">データを読み込み中...</p>
+    </div>
+  </div>
+
+  <!-- 単語一覧パネル -->
+  <div id="admin-panel-words" class="hidden">
+    <div class="admin-toolbar">
+      <input type="text" id="admin-word-search" class="admin-search" placeholder="英単語・日本語で検索...">
+      <select id="admin-word-section-filter" class="admin-section-select">
+        <option value="">全セクション</option>
+        <option value="0001-0300">テスト1（0001〜0300）</option>
+        <option value="0301-0600">テスト2（0301〜0600）</option>
+        <option value="0601-0800">テスト3（0601〜0800）</option>
+        <option value="0801-1100">テスト4（0801〜1100）</option>
+        <option value="1101-1300">テスト5（1101〜1300）</option>
+        <option value="1301-1600">テスト6（1301〜1600）</option>
+        <option value="1601-1900">テスト7（1601〜1900）</option>
+        <option value="1901-2016">追加範囲（1901〜2016）</option>
+      </select>
+    </div>
+    <div id="admin-word-count" class="admin-word-count"></div>
+    <div id="admin-word-list-wrap"></div>
   </div>
 </div>
 
@@ -314,7 +342,14 @@
     <div class="modal-header">
       <div>
         <h3 class="modal-title" id="detail-student-name"></h3>
-        <div class="modal-subtitle" id="detail-student-email"></div>
+        
+        <div class="detail-credentials" id="detail-credentials">
+          <span class="detail-cred-item">🪪 ID: <strong id="detail-student-id"></strong></span>
+          <span class="detail-cred-item">🔑 PW:
+            <strong id="detail-student-pw"></strong>
+            <button class="btn-pw-toggle" id="btn-pw-toggle" onclick="toggleDetailPw()">表示</button>
+          </span>
+        </div>
       </div>
       <button class="modal-close-btn" id="btn-close-detail">✕</button>
     </div>

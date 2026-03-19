@@ -181,12 +181,68 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 .stat-num { font-size: 1.8rem; font-weight: bold; color: #FF6B9D; line-height: 1; }
 .stat-label { font-size: .72rem; color: #aaa; margin-top: 4px; }
 
+/* Admin tab bar */
+.admin-tab-bar {
+  display: flex; gap: 6px; margin-bottom: 16px;
+  border-bottom: 2px solid #FFE0EE; padding-bottom: 0;
+}
+.admin-tab-btn {
+  padding: 8px 18px; border: none; border-radius: 10px 10px 0 0;
+  background: #f5f5f5; color: #aaa; font-size: .88rem; font-weight: bold;
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+  transition: all .15s;
+}
+.admin-tab-btn.active {
+  background: #fff; color: #FF6B9D;
+  border-bottom: 2px solid #fff;
+  box-shadow: 0 -2px 6px rgba(255,107,157,.1);
+}
+
 .admin-toolbar { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; }
 .admin-search {
   flex: 1; padding: 10px 14px; border: 1.5px solid #ddd; border-radius: 10px;
   font-size: .9rem; outline: none;
 }
 .admin-search:focus { border-color: #FF6B9D; }
+.admin-section-select {
+  padding: 9px 10px; border: 1.5px solid #ddd; border-radius: 10px;
+  font-size: .85rem; outline: none; background: #fff; color: #333;
+  min-width: 160px;
+}
+.admin-section-select:focus { border-color: #FF6B9D; }
+
+/* Admin word count bar */
+.admin-word-count {
+  font-size: .8rem; color: #aaa; margin-bottom: 10px; padding-left: 2px;
+}
+
+/* Word list */
+.word-list-section { margin-bottom: 20px; }
+.word-list-section-header {
+  display: flex; align-items: center; gap: 8px;
+  background: #FFF0F6; border-left: 4px solid #FF6B9D;
+  padding: 8px 14px; border-radius: 0 8px 8px 0;
+  font-weight: bold; font-size: .9rem; color: #FF6B9D;
+  margin-bottom: 6px;
+}
+.word-list-section-range { font-size: .78rem; color: #bbb; font-weight: normal; }
+.word-list-section-count {
+  margin-left: auto; font-size: .78rem; background: #FF6B9D;
+  color: #fff; padding: 2px 8px; border-radius: 10px; font-weight: normal;
+}
+.word-list-table {
+  width: 100%; border-collapse: collapse; font-size: .85rem;
+}
+.word-list-table thead tr { background: #fafafa; }
+.word-list-table th {
+  padding: 7px 10px; text-align: left; color: #888;
+  font-weight: bold; border-bottom: 1.5px solid #eee; white-space: nowrap;
+}
+.word-list-table td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; }
+.word-list-table tbody tr:hover { background: #FFF8FB; }
+.wl-no { color: #bbb; font-size: .78rem; width: 52px; }
+.wl-en { font-weight: 600; color: #333; }
+.wl-ja { color: #555; }
 
 .admin-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .admin-table {
@@ -333,6 +389,19 @@ body.has-tab-bar .screen { padding-bottom: 76px; }
 /* ===== Student Detail Modal ===== */
 .modal-box-wide { max-width: 480px; width: calc(100vw - 32px); }
 .modal-subtitle { font-size: .8rem; color: #aaa; margin-top: 2px; }
+
+.detail-credentials {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 6px; padding: 6px 10px;
+  background: #fdf0f6; border-radius: 8px;
+  font-size: .8rem; color: #555;
+}
+.detail-cred-item { display: flex; align-items: center; gap: 4px; }
+.btn-pw-toggle {
+  font-size: .7rem; padding: 1px 7px; border-radius: 10px;
+  border: 1px solid #FF6B9D; background: #fff; color: #FF6B9D;
+  cursor: pointer; margin-left: 4px;
+}
 
 .detail-tabs {
   display: flex; gap: 6px; padding-top: 14px;
@@ -837,6 +906,14 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
   border-radius: 14px;
 }
 .btn-flashcard:active { transform: scale(.97); }
+.btn-flashcard-review {
+  background: linear-gradient(135deg, #9B8DF7, #7C6CF5);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  opacity: .85;
+}
+.btn-flashcard-review:active { transform: scale(.97); }
 
 /* ===== Flashcard Screen ===== */
 .fc-tabs {
@@ -861,7 +938,7 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
   white-space: nowrap;
 }
 .fc-tab.active {
-  background: #222;
+  background: #FF6B9D;
   color: #fff;
 }
 .fc-counter {
@@ -934,7 +1011,7 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
 .fc-play-btn {
   width: 40px; height: 40px;
   border-radius: 50%;
-  background: #222;
+  background: #FF6B9D;
   color: #fff;
   border: none;
   font-size: .95rem;
@@ -966,9 +1043,9 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
 .fc-btn-unknown:active { background: #f0f0f0; }
 .fc-btn-known {
   padding: 15px;
-  border: 2px solid #222;
+  border: 2px solid #FF6B9D;
   border-radius: 30px;
-  background: #222;
+  background: #FF6B9D;
   color: #fff;
   font-size: .95rem;
   font-weight: bold;
