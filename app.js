@@ -352,7 +352,6 @@ document.getElementById('btn-signup').addEventListener('click', async () => {
 function logout() {
   auth.signOut();
 }
-document.getElementById('btn-logout').addEventListener('click', logout);
 document.getElementById('btn-admin-logout').addEventListener('click', logout);
 document.getElementById('btn-bookpicker-logout').addEventListener('click', logout);
 
