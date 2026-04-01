@@ -917,18 +917,47 @@ document.getElementById('btn-tutorial-skip').addEventListener('click', closeTuto
 document.getElementById('btn-tutorial-open').addEventListener('click', openTutorial);
 
 // ===== My Page =====
+// マイページで選択中の単語帳ID（currentBookと独立）
+let mypageBookId = null;
+
 function openMyPage() {
   document.getElementById('profile-name-text').textContent = userName;
   document.getElementById('profile-email').textContent = userId ? `ID: ${userId}` : '';
   document.getElementById('profile-name-display').classList.remove('hidden');
   document.getElementById('profile-name-edit').classList.add('hidden');
 
-  if (!currentBook) { showScreen('screen-mypage'); return; }
+  // 初期選択: currentBook があればそれ、なければ最初のBOOK
+  if (!mypageBookId) {
+    mypageBookId = (currentBook || BOOKS[0]).id;
+  }
 
-  const rec = currentRecords();
-  const words = currentBook.words().filter(w => w.japanese);
+  renderMypageBookTabs();
+  renderMypageStats();
+  renderMemoList();
+  showScreen('screen-mypage');
+}
 
-  // 現在の単語帳の努力量
+function renderMypageBookTabs() {
+  const tabBar = document.getElementById('mypage-book-tabs');
+  tabBar.innerHTML = '';
+  BOOKS.forEach(book => {
+    const btn = document.createElement('button');
+    btn.className = 'mypage-book-tab' + (book.id === mypageBookId ? ' active' : '');
+    btn.textContent = `${book.icon} ${book.name}`;
+    btn.addEventListener('click', () => {
+      mypageBookId = book.id;
+      renderMypageBookTabs();
+      renderMypageStats();
+    });
+    tabBar.appendChild(btn);
+  });
+}
+
+function renderMypageStats() {
+  const book = BOOKS.find(b => b.id === mypageBookId) || BOOKS[0];
+  const rec = state.bookRecords[book.id] || {};
+  const words = book.words().filter(w => w.japanese);
+
   let totalAttempts = 0, totalWrongCount = 0, masteredCount = 0;
   words.forEach(w => {
     const r = rec[w.no];
@@ -941,27 +970,29 @@ function openMyPage() {
   const accuracy = totalAttempts > 0 ? Math.round((totalAnsweredCorrect / totalAttempts) * 100) : 0;
 
   // 全単語帳合計の習得語数
-  const allMastered = BOOKS.reduce((sum, book) => {
-    const br = state.bookRecords[book.id] || {};
-    return sum + book.words().filter(w => w.japanese && br[w.no]?.correct).length;
+  const allMastered = BOOKS.reduce((sum, b) => {
+    const br = state.bookRecords[b.id] || {};
+    return sum + b.words().filter(w => w.japanese && br[w.no]?.correct).length;
   }, 0);
-  const allTotal = BOOKS.reduce((sum, book) => sum + book.words().filter(w => w.japanese).length, 0);
+  const allTotal = BOOKS.reduce((sum, b) => sum + b.words().filter(w => w.japanese).length, 0);
 
   document.getElementById('effort-grid').innerHTML = `
-    <div class="stat-item"><div class="stat-num">${masteredCount}</div><div class="stat-label">${currentBook.name}<br>習得語数</div></div>
+    <div class="stat-item"><div class="stat-num">${masteredCount}</div><div class="stat-label">${book.name}<br>習得語数</div></div>
     <div class="stat-item"><div class="stat-num">${totalAttempts}</div><div class="stat-label">総回答数</div></div>
     <div class="stat-item"><div class="stat-num">${accuracy}<span style="font-size:1rem">%</span></div><div class="stat-label">正答率</div></div>
     <div class="stat-item"><div class="stat-num">${totalWrongCount}</div><div class="stat-label">バツのある単語</div></div>
     <div class="stat-item stat-item-wide"><div class="stat-num">${allMastered}<span style="font-size:1rem"> / ${allTotal}</span></div><div class="stat-label">全単語帳 合計習得語数</div></div>
   `;
 
-  // セクション別進捗（現在の単語帳）
+  // セクション別進捗
   const list = document.getElementById('section-progress-list');
   list.innerHTML = '';
-  currentBook.sections.forEach(sec => {
-    const { correct, total } = getSectionStats(sec.id);
+  book.sections.forEach(sec => {
+    const secWords = book.words().filter(w => w.section === sec.id && w.japanese);
+    const correct = secWords.filter(w => rec[w.no]?.correct).length;
+    const total = book.words().filter(w => w.section === sec.id).length;
     const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
-    const cleared = correct === total && total > 0;
+    const cleared = secWords.length > 0 && correct === secWords.length;
     const item = document.createElement('div');
     item.className = 'sp-item';
     item.innerHTML = `
@@ -973,9 +1004,6 @@ function openMyPage() {
     `;
     list.appendChild(item);
   });
-
-  renderMemoList();
-  showScreen('screen-mypage');
 }
 
 function renderMemoList() {

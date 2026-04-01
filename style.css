@@ -297,6 +297,18 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 
 .effort-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 24px; }
 
+.mypage-book-tabs {
+  display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.mypage-book-tab {
+  padding: 6px 14px; border-radius: 20px; border: 2px solid #FFB7D5;
+  background: #fff; color: #FF6B9D; font-size: .85rem; font-weight: bold;
+  cursor: pointer; transition: all .2s;
+}
+.mypage-book-tab.active {
+  background: #FF6B9D; color: #fff; border-color: #FF6B9D;
+}
+
 .sp-item { margin-bottom: 14px; }
 .sp-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
 .sp-label { font-size: .9rem; font-weight: bold; color: #333; }
