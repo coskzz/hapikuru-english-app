@@ -1318,6 +1318,7 @@ function renderAdminTable(students) {
       <thead>
         <tr>
           <th class="col-name">氏名</th>
+          <th class="col-id">ID</th>
           ${adminBook.sections.map(s => `<th class="col-sec">${s.label.replace('テスト ', 'T')}</th>`).join('')}
           <th class="col-total">合計</th>
           <th class="col-wrong">バツ数</th>
@@ -1335,7 +1336,8 @@ function renderAdminTable(students) {
     const updatedAt    = student.updatedAt?.toDate ? student.updatedAt.toDate().toLocaleDateString('ja-JP') : '—';
 
     html += `<tr>
-      <td class="col-name col-name-link" onclick="openStudentDetail('${student.uid}')"><strong>${student.name || '—'}</strong><br><small>${student.userId ? 'ID: ' + student.userId : ''}</small></td>
+      <td class="col-name col-name-link" onclick="openStudentDetail('${student.uid}')"><strong>${student.name || '—'}</strong></td>
+      <td class="col-id">${student.userId || '—'}</td>
     `;
 
     adminBook.sections.forEach(sec => {

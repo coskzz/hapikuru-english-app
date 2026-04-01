@@ -256,8 +256,8 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 .admin-table td { padding: 10px 8px; border-bottom: 1px solid #f0f0f0; text-align: center; vertical-align: middle; }
 .admin-table tr:hover td { background: #FFFAFC; }
 
-.col-name { text-align: left !important; min-width: 120px; }
-.col-name small { color: #aaa; font-size: .75rem; display: block; }
+.col-name { text-align: left !important; min-width: 100px; }
+.col-id   { text-align: left !important; min-width: 80px; font-size: .85rem; color: #999; }
 .col-sec  { width: 62px; }
 .col-total { width: 70px; }
 .col-wrong { width: 60px; }
