@@ -77,6 +77,7 @@ let state        = {
 };
 let adminStudentsMap = {};
 let currentDetailUid = null;
+let adminBookId = 'ex'; // 管理画面で現在表示中の単語帳ID
 
 let quiz = {
   section: null, pool: [], allWords: [], mode: 'normal', orderMode: 'random',
@@ -1227,9 +1228,6 @@ document.getElementById('btn-report-quiz').addEventListener('click', () => {
 document.getElementById('btn-report-general').addEventListener('click', () => openReport(null));
 
 // ===== Admin =====
-// 管理画面で現在表示中の単語帳ID
-let adminBookId = 'ex';
-
 async function loadAdminData() {
   const wrap = document.getElementById('admin-table-wrap');
   wrap.innerHTML = '<p class="loading-text">データを読み込み中...</p>';
