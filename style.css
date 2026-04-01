@@ -1054,6 +1054,107 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
 }
 .fc-btn-known:active { opacity: .8; }
 
+/* ===== 単語帳選択画面 ===== */
+.book-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+.book-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border: 2px solid #FFB3D1;
+  border-radius: 16px;
+  padding: 18px 16px;
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+  box-shadow: 0 2px 6px rgba(255,107,157,.08);
+}
+.book-card:active { box-shadow: 0 1px 3px rgba(255,107,157,.2); border-color: #FF6B9D; }
+.book-card-disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: #f9f9f9;
+}
+.book-card-icon {
+  font-size: 2.4rem;
+  flex-shrink: 0;
+}
+.book-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.book-card-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 2px;
+}
+.book-card-label {
+  font-size: .8rem;
+  color: #888;
+  margin-bottom: 6px;
+}
+.book-card-progress {
+  font-size: .85rem;
+  color: #555;
+  margin-bottom: 4px;
+}
+.book-progress-bar-wrap {
+  height: 6px;
+  background: #FFE0ED;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.book-progress-bar {
+  height: 100%;
+  background: #FF6B9D;
+  border-radius: 3px;
+  transition: width .3s ease;
+}
+.book-card-coming {
+  font-size: .85rem;
+  color: #aaa;
+  font-style: italic;
+}
+.book-card-arrow {
+  font-size: 1.6rem;
+  color: #FFB3D1;
+  flex-shrink: 0;
+}
+
+/* 管理画面 単語帳タブ */
+.admin-book-tab-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px 0;
+}
+.admin-book-tab-btn {
+  padding: 6px 14px;
+  border: 2px solid #ddd;
+  border-radius: 20px;
+  background: #fff;
+  color: #666;
+  font-size: .85rem;
+  cursor: pointer;
+  transition: all .15s;
+}
+.admin-book-tab-btn.active {
+  border-color: #FF6B9D;
+  background: #FF6B9D;
+  color: #fff;
+}
+
+/* マイページ・学習データ: 全単語帳合計の広いstatカード */
+.stat-item-wide {
+  grid-column: 1 / -1;
+  background: #FFF0F6;
+  border: 1px solid #FFB3D1;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 360px) {
   .word-display { font-size: 1.6rem; }

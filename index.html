@@ -51,16 +51,31 @@
   </div>
 </div>
 
+<!-- 単語帳選択画面 -->
+<div id="screen-bookpicker" class="screen">
+  <div class="home-header">
+    <div>
+      <div class="logo">🌸 ハピクル英語塾</div>
+      <div class="subtitle">単語帳を選んでください</div>
+    </div>
+    <div class="home-header-right">
+      <span class="user-name" id="bookpicker-username"></span>
+      <button id="btn-bookpicker-logout" class="btn btn-secondary btn-small">ログアウト</button>
+    </div>
+  </div>
+  <div class="book-grid" id="book-grid"></div>
+</div>
+
 <!-- ホーム画面 -->
 <div id="screen-home" class="screen">
   <div class="home-header">
     <div>
       <div class="logo">🌸 ハピクル英語塾</div>
-      <div class="subtitle">英検準1級 単語テスト</div>
+      <div class="subtitle" id="home-book-label">英検準1級 単語テスト</div>
     </div>
     <div class="home-header-right">
       <span class="user-name" id="home-username"></span>
-      <button id="btn-logout" class="btn btn-secondary btn-small">ログアウト</button>
+      <button id="btn-back-bookpicker" class="btn btn-secondary btn-small">← 単語帳</button>
     </div>
   </div>
 
@@ -449,9 +464,12 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
 <script src="firebase-config.js"></script>
-<script src="data.js"></script>
-<script src="phonetics.js"></script>
-<script src="word_extras.js"></script>
+<script src="data_ex.js"></script>
+<script src="data_pastan.js"></script>
+<script src="phonetics_ex.js"></script>
+<script src="phonetics_pastan.js"></script>
+<script src="word_extras_ex.js"></script>
+<script src="word_extras_pastan.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

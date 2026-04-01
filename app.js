@@ -9,16 +9,59 @@ try {
   console.error('Firebase init error:', e);
 }
 
-// ===== Constants =====
-const SECTIONS = [
-  { id: '0001-0300', label: 'テスト 1', range: 'No.0001〜0300' },
-  { id: '0301-0600', label: 'テスト 2', range: 'No.0301〜0600' },
-  { id: '0601-0800', label: 'テスト 3', range: 'No.0601〜0800' },
-  { id: '0801-1100', label: 'テスト 4', range: 'No.0801〜1100' },
-  { id: '1101-1300', label: 'テスト 5', range: 'No.1101〜1300' },
-  { id: '1301-1600', label: 'テスト 6', range: 'No.1301〜1600' },
-  { id: '1601-1900', label: 'テスト 7', range: 'No.1601〜1900' },
-  { id: '1901-2016', label: '追加範囲', range: 'No.1901〜2016' },
+// ===== BOOKS定数（複数単語帳管理） =====
+const BOOKS = [
+  {
+    id: 'ex',
+    name: '単語EX',
+    label: '英検準1級 単語EX',
+    icon: '📘',
+    words: () => (typeof WORDS_EX !== 'undefined' ? WORDS_EX : []),
+    extras: () => (typeof WORD_EXTRAS_EX !== 'undefined' ? WORD_EXTRAS_EX : {}),
+    phonetics: () => (typeof PHONETICS_EX !== 'undefined' ? PHONETICS_EX : {}),
+    sections: [
+      { id: '0001-0300', label: 'テスト 1', range: 'No.0001〜0300' },
+      { id: '0301-0600', label: 'テスト 2', range: 'No.0301〜0600' },
+      { id: '0601-0800', label: 'テスト 3', range: 'No.0601〜0800' },
+      { id: '0801-1100', label: 'テスト 4', range: 'No.0801〜1100' },
+      { id: '1101-1300', label: 'テスト 5', range: 'No.1101〜1300' },
+      { id: '1301-1600', label: 'テスト 6', range: 'No.1301〜1600' },
+      { id: '1601-1900', label: 'テスト 7', range: 'No.1601〜1900' },
+      { id: '1901-2016', label: '追加範囲', range: 'No.1901〜2016' },
+    ],
+    firestoreKey: 'records_ex',
+  },
+  {
+    id: 'pastan',
+    name: 'パス単',
+    label: '英検準1級 パス単',
+    icon: '📗',
+    words: () => (typeof WORDS_PASTAN !== 'undefined' ? WORDS_PASTAN : []),
+    extras: () => (typeof WORD_EXTRAS_PASTAN !== 'undefined' ? WORD_EXTRAS_PASTAN : {}),
+    phonetics: () => (typeof PHONETICS_PASTAN !== 'undefined' ? PHONETICS_PASTAN : {}),
+    sections: [
+      { id: '0001-0100', label: 'パス単 1',          range: 'No.0001〜0100' },
+      { id: '0101-0200', label: 'パス単 2',          range: 'No.0101〜0200' },
+      { id: '0201-0300', label: 'パス単 3',          range: 'No.0201〜0300' },
+      { id: '0301-0400', label: 'パス単 4',          range: 'No.0301〜0400' },
+      { id: '0401-0500', label: 'パス単 5',          range: 'No.0401〜0500' },
+      { id: '0501-0600', label: 'パス単 6',          range: 'No.0501〜0600' },
+      { id: '0601-0700', label: 'パス単 7',          range: 'No.0601〜0700' },
+      { id: '0701-0800', label: 'パス単 8',          range: 'No.0701〜0800' },
+      { id: '0801-0900', label: 'パス単 9',          range: 'No.0801〜0900' },
+      { id: '0901-1000', label: 'パス単 10',         range: 'No.0901〜1000' },
+      { id: '1001-1100', label: 'パス単 11',         range: 'No.1001〜1100' },
+      { id: '1101-1200', label: 'パス単 12',         range: 'No.1101〜1200' },
+      { id: '1201-1300', label: 'パス単 13',         range: 'No.1201〜1300' },
+      { id: '1301-1400', label: 'パス単 14',         range: 'No.1301〜1400' },
+      { id: '1401-1500', label: 'パス単 15',         range: 'No.1401〜1500' },
+      { id: '1501-1600', label: 'パス単 16',         range: 'No.1501〜1600' },
+      { id: '1601-1700', label: 'パス単 17（句動詞）', range: 'No.1601〜1700' },
+      { id: '1701-1800', label: 'パス単 18（句動詞）', range: 'No.1701〜1800' },
+      { id: '1801-1900', label: 'パス単 19（句動詞）', range: 'No.1801〜1900' },
+    ],
+    firestoreKey: 'records_pastan',
+  },
 ];
 
 // ===== App State =====
@@ -26,7 +69,12 @@ let currentUser  = null;
 let userRole     = 'student';
 let userName     = '';
 let userId       = '';
-let state        = { records: {}, dailyLog: {}, streak: 0, bestStreak: 0, points: 0, lastStudyDate: null, tutorialDone: false, memos: {} };
+let currentBook  = null; // 現在選択中の単語帳
+let state        = {
+  bookRecords: { ex: {}, pastan: {} }, // 単語帳ごとの進捗
+  dailyLog: {}, streak: 0, bestStreak: 0, points: 0,
+  lastStudyDate: null, tutorialDone: false, memos: {},
+};
 let adminStudentsMap = {};
 let currentDetailUid = null;
 
@@ -42,9 +90,16 @@ let fc = {
 };
 let lastCompleteType = 'quiz';
 
+// 現在の単語帳のrecordsへの参照を返す
+function currentRecords() {
+  if (!currentBook) return {};
+  if (!state.bookRecords[currentBook.id]) state.bookRecords[currentBook.id] = {};
+  return state.bookRecords[currentBook.id];
+}
+
 // ===== Screens =====
 const SCREEN_TAB = {
-  'screen-home': 'test', 'screen-mode': 'test', 'screen-complete': 'test',
+  'screen-bookpicker': 'test', 'screen-home': 'test', 'screen-mode': 'test', 'screen-complete': 'test',
   'screen-stats': 'stats',
   'screen-mypage': 'mypage',
   'screen-admin': 'admin',
@@ -73,17 +128,8 @@ function showScreen(id) {
 }
 
 // ===== Character Coach =====
-// pose → ファイル名マッピング
-// 画像は images/ フォルダに配置
-// hello:  花を持ってウインク（ホーム）
-// fight:  格闘ポーズ（モード選択）
-// cheer:  両手を挙げて応援（完了・高得点）
-// happy:  ピースサイン笑顔（完了・中得点）
-// worry:  顔に手を当てて困り顔（完了・低得点）
-// teach:  指を立てて教える（完了・中）
-// study:  本を読んでいる・眼鏡（学習データ）
-// think:  顎に手を当てて考える（マイページ）
 const CHARA_CONFIG = {
+  'screen-bookpicker': { pose: 'hello', msgs: ['今日も頑張ろう！', 'コツコツ続けよう！', '英検合格まで一緒に！'] },
   'screen-home':     { pose: 'hello', msgs: ['今日も頑張ろう！', 'コツコツ続けよう！', '英検合格まで一緒に！'] },
   'screen-mode':     { pose: 'fight', msgs: ['さあ挑戦だ！', '全力で行こう！', 'できるよ、信じてる！'] },
   'screen-complete': { pose: 'cheer', msgs: ['よく頑張った！', '素晴らしい！', 'その調子で続けよう！'] },
@@ -101,7 +147,6 @@ function updateChara(screenId) {
   const cfg = CHARA_CONFIG[screenId];
   if (!cfg) { widget.classList.add('hidden'); return; }
 
-  // 完了画面はスコアでポーズを使い分け
   let pose = cfg.pose;
   if (screenId === 'screen-complete') {
     const total = quiz.sessionCorrect + quiz.sessionWrong;
@@ -116,7 +161,6 @@ function updateChara(screenId) {
   widget.classList.remove('hidden');
 }
 
-// キャラクタークリックで吹き出しメッセージを変える
 document.getElementById('chara-widget').addEventListener('click', () => {
   const screenId = document.querySelector('.screen.active')?.id;
   const cfg = CHARA_CONFIG[screenId];
@@ -126,7 +170,6 @@ document.getElementById('chara-widget').addEventListener('click', () => {
   const current = bubble.textContent;
   const next = msgs[(msgs.indexOf(current) + 1) % msgs.length];
   bubble.textContent = next;
-  // バウンスアニメ
   const widget = document.getElementById('chara-widget');
   widget.classList.add('chara-bounce');
   setTimeout(() => widget.classList.remove('chara-bounce'), 400);
@@ -157,7 +200,19 @@ async function loadUserData(uid) {
     userRole  = d.role   || 'student';
     userName  = d.name   || '';
     userId    = d.userId || '';
-    state.records       = d.records       || {};
+
+    // マイグレーション: 旧 records → records_ex
+    if (d.records && !d.records_ex) {
+      state.bookRecords.ex = d.records;
+      await db.collection('users').doc(uid).set(
+        { records_ex: d.records },
+        { merge: true }
+      ).catch(console.error);
+    } else {
+      state.bookRecords.ex = d.records_ex || {};
+    }
+    state.bookRecords.pastan = d.records_pastan || {};
+
     state.dailyLog      = d.dailyLog      || {};
     state.streak        = d.streak        || 0;
     state.bestStreak    = d.bestStreak    || 0;
@@ -167,7 +222,7 @@ async function loadUserData(uid) {
     state.memos         = d.memos         || {};
   } else {
     userRole = 'student';
-    state.records       = {};
+    state.bookRecords   = { ex: {}, pastan: {} };
     state.dailyLog      = {};
     state.streak        = 0;
     state.bestStreak    = 0;
@@ -181,24 +236,38 @@ async function loadUserData(uid) {
 function saveState() {
   if (!currentUser) return;
   const today = new Date().toISOString().slice(0, 10);
-  const mastered = WORDS.filter(w => w.japanese && state.records[w.no]?.correct).length;
-  state.dailyLog[today] = { mastered };
+  // 全単語帳の合計 mastered を dailyLog に記録
+  const totalMastered = BOOKS.reduce((sum, book) => {
+    return sum + book.words().filter(w => w.japanese && state.bookRecords[book.id]?.[w.no]?.correct).length;
+  }, 0);
+  state.dailyLog[today] = { mastered: totalMastered };
   db.collection('users').doc(currentUser.uid).set(
     {
-      records: state.records, dailyLog: state.dailyLog,
-      streak: state.streak, bestStreak: state.bestStreak,
-      points: state.points, lastStudyDate: state.lastStudyDate,
-      tutorialDone: state.tutorialDone,
-      memos: state.memos,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      records_ex:      state.bookRecords.ex,
+      records_pastan:  state.bookRecords.pastan,
+      dailyLog:        state.dailyLog,
+      streak:          state.streak,
+      bestStreak:      state.bestStreak,
+      points:          state.points,
+      lastStudyDate:   state.lastStudyDate,
+      tutorialDone:    state.tutorialDone,
+      memos:           state.memos,
+      updatedAt:       firebase.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   ).catch(console.error);
 }
 
+// saveState の別名（フラッシュカード完了時などに使用）
+const saveRecords = saveState;
+
 function resetState() {
   if (!confirm('全学習データをリセットしますか？\nこの操作は元に戻せません。')) return;
-  state = { records: {}, dailyLog: {}, streak: 0, bestStreak: 0, points: 0, lastStudyDate: null, tutorialDone: state.tutorialDone, memos: {} };
+  state = {
+    bookRecords: { ex: {}, pastan: {} },
+    dailyLog: {}, streak: 0, bestStreak: 0, points: 0,
+    lastStudyDate: null, tutorialDone: state.tutorialDone, memos: {},
+  };
   saveState();
   renderHome();
 }
@@ -210,23 +279,24 @@ auth.onAuthStateChanged(async (user) => {
     showScreen('screen-loading');
     await loadUserData(user.uid);
 
-    document.getElementById('home-username').textContent = userName;
+    document.getElementById('home-username').textContent     = userName;
+    document.getElementById('bookpicker-username').textContent = userName;
     if (userRole === 'teacher') {
       document.getElementById('admin-teacher-name').textContent = `講師: ${userName}`;
       document.getElementById('tab-admin').classList.remove('hidden');
-      renderHome();
       showScreen('screen-admin');
       loadAdminData();
     } else {
       document.getElementById('tab-admin').classList.add('hidden');
-      renderHome();
-      showScreen('screen-home');
+      renderBookPicker();
+      showScreen('screen-bookpicker');
       if (!state.tutorialDone) {
         setTimeout(() => openTutorial(), 600);
       }
     }
   } else {
     currentUser = null;
+    currentBook = null;
     document.getElementById('tab-bar').classList.add('hidden');
     document.body.classList.remove('has-tab-bar');
     showScreen('screen-login');
@@ -268,7 +338,7 @@ document.getElementById('btn-signup').addEventListener('click', async () => {
     document.getElementById('btn-signup').textContent = '...';
     const cred = await auth.createUserWithEmailAndPassword(idToEmail(userId), password);
     await db.collection('users').doc(cred.user.uid).set({
-      name, userId, password, role: 'student', records: {},
+      name, userId, password, role: 'student', records_ex: {}, records_pastan: {},
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
   } catch (e) {
@@ -283,6 +353,7 @@ function logout() {
 }
 document.getElementById('btn-logout').addEventListener('click', logout);
 document.getElementById('btn-admin-logout').addEventListener('click', logout);
+document.getElementById('btn-bookpicker-logout').addEventListener('click', logout);
 
 // ===== Auth helpers =====
 function showAuthError(el, msg) {
@@ -317,38 +388,74 @@ document.getElementById('show-login').addEventListener('click', (e) => {
 // ===== Part of Speech =====
 function getPos(word, japanese) {
   const w = word.toLowerCase();
-  // 日本語訳から動詞を判定（最優先）
   const verbJ = ['する', 'させる', 'される', 'てる', 'でる', 'ける', 'める', 'える', 'せる', 'ねる', 'べる', 'げる'];
   if (verbJ.some(e => japanese.endsWith(e))) return '動';
-  // 日本語訳：い形容詞
   if (japanese.endsWith('い')) return '形';
-  // 日本語訳：な形容詞
   if (japanese.endsWith('な') || japanese.endsWith('の')) return '形';
-  // 英語語尾：副詞
   if (w.endsWith('ly') && w.length > 4) return '副';
-  // 英語語尾：形容詞
   if (/(?:ful|less|ive|ous|ible|able|ic|ish)$/.test(w)) return '形';
-  // 英語語尾：動詞
   if (/(?:ize|ise|ify|ate)$/.test(w)) return '動';
-  // デフォルト：名詞
   return '名';
+}
+
+// ===== 単語帳選択画面 =====
+function renderBookPicker() {
+  const grid = document.getElementById('book-grid');
+  grid.innerHTML = '';
+  BOOKS.forEach(book => {
+    const allWords = book.words();
+    const words = allWords.filter(w => w.japanese);
+    const records = state.bookRecords[book.id] || {};
+    const masteredCount = words.filter(w => records[w.no]?.correct).length;
+    const totalCount = words.length;
+    const pct = totalCount > 0 ? Math.round((masteredCount / totalCount) * 100) : 0;
+    const hasData = allWords.length > 0 && book.sections.length > 0;
+
+    const card = document.createElement('div');
+    card.className = 'book-card' + (!hasData ? ' book-card-disabled' : '');
+    card.innerHTML = `
+      <div class="book-card-icon">${book.icon}</div>
+      <div class="book-card-body">
+        <div class="book-card-name">${book.name}</div>
+        <div class="book-card-label">${book.label}</div>
+        ${hasData
+          ? `<div class="book-card-progress">${masteredCount} / ${totalCount} 語習得（${pct}%）</div>
+             <div class="book-progress-bar-wrap"><div class="book-progress-bar" style="width:${pct}%"></div></div>`
+          : `<div class="book-card-coming">準備中</div>`
+        }
+      </div>
+      <div class="book-card-arrow">${hasData ? '›' : ''}</div>
+    `;
+    if (hasData) {
+      card.addEventListener('click', () => {
+        currentBook = book;
+        document.getElementById('home-book-label').textContent = book.label;
+        renderHome();
+        showScreen('screen-home');
+      });
+    }
+    grid.appendChild(card);
+  });
 }
 
 // ===== Home =====
 function wordsForSection(sectionId) {
-  return WORDS.filter(w => w.section === sectionId && w.japanese);
+  return currentBook.words().filter(w => w.section === sectionId && w.japanese);
 }
 function getSectionStats(sectionId) {
   const words = wordsForSection(sectionId);
-  const correct    = words.filter(w => state.records[w.no]?.correct).length;
-  const wrongCount = words.filter(w => (state.records[w.no]?.wrongCount || 0) > 0 && !state.records[w.no]?.correct).length;
-  return { total: words.length, correct, wrongCount };
+  const allSectionWords = currentBook.words().filter(w => w.section === sectionId);
+  const rec = currentRecords();
+  const correct    = words.filter(w => rec[w.no]?.correct).length;
+  const wrongCount = words.filter(w => (rec[w.no]?.wrongCount || 0) > 0 && !rec[w.no]?.correct).length;
+  return { total: allSectionWords.length, correct, wrongCount };
 }
 
 function renderHome() {
+  if (!currentBook) return;
   const grid = document.getElementById('section-grid');
   grid.innerHTML = '';
-  SECTIONS.forEach(sec => {
+  currentBook.sections.forEach(sec => {
     const { correct, wrongCount, total } = getSectionStats(sec.id);
     const cleared = total > 0 && correct === total;
     const card = document.createElement('div');
@@ -371,10 +478,11 @@ function openMode(sec) {
   document.getElementById('mode-section-title').textContent = `${sec.label}（${sec.range}）`;
   const { correct, total } = getSectionStats(sec.id);
   const words = wordsForSection(sec.id);
-  const wrongWords  = words.filter(w => (state.records[w.no]?.wrongCount || 0) > 0);
-  const luckyWords  = words.filter(w => state.records[w.no]?.lucky === true);
+  const rec = currentRecords();
+  const wrongWords  = words.filter(w => (rec[w.no]?.wrongCount || 0) > 0);
+  const luckyWords  = words.filter(w => rec[w.no]?.lucky === true);
   const combinedLen = words.filter(w =>
-    (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.lucky === true
+    (rec[w.no]?.wrongCount || 0) > 0 || rec[w.no]?.lucky === true
   ).length;
 
   document.getElementById('mode-stats').innerHTML = `
@@ -396,13 +504,12 @@ function openMode(sec) {
   combinedBtn.style.opacity = combinedLen === 0 ? '.4' : '1';
 
   const fcReviewWords = words.filter(w =>
-    (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.fcUnknown === true
+    (rec[w.no]?.wrongCount || 0) > 0 || rec[w.no]?.fcUnknown === true
   );
   const fcReviewBtn = document.getElementById('btn-start-flashcard-review');
   fcReviewBtn.disabled = fcReviewWords.length === 0;
   fcReviewBtn.style.opacity = fcReviewWords.length === 0 ? '.4' : '1';
 
-  // 続きから再開ボタン
   const resumeBtn = document.getElementById('btn-start-resume');
   const saved = getSavedQuiz();
   if (saved && saved.sectionId === sec.id) {
@@ -433,23 +540,24 @@ function startQuiz(mode) {
   quiz.answered       = false;
   const allWords = wordsForSection(quiz.section.id);
   quiz.allWords = allWords;
+  const rec = currentRecords();
 
   const applyOrder = arr => quiz.orderMode === 'sequential'
     ? [...arr].sort((a, b) => a.no.localeCompare(b.no))
     : shuffle(arr);
 
   if (mode === 'review') {
-    quiz.pool = applyOrder(allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0));
+    quiz.pool = applyOrder(allWords.filter(w => (rec[w.no]?.wrongCount || 0) > 0));
   } else if (mode === 'lucky') {
-    quiz.pool = applyOrder(allWords.filter(w => state.records[w.no]?.lucky === true));
+    quiz.pool = applyOrder(allWords.filter(w => rec[w.no]?.lucky === true));
   } else if (mode === 'review-combined') {
     quiz.pool = applyOrder(allWords.filter(w =>
-      (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.lucky === true
+      (rec[w.no]?.wrongCount || 0) > 0 || rec[w.no]?.lucky === true
     ));
   } else {
-    quiz.pool = applyOrder(allWords.filter(w => !state.records[w.no]?.correct));
+    quiz.pool = applyOrder(allWords.filter(w => !rec[w.no]?.correct));
     if (quiz.pool.length === 0) {
-      allWords.forEach(w => { if (state.records[w.no]) state.records[w.no].correct = false; });
+      allWords.forEach(w => { if (rec[w.no]) rec[w.no].correct = false; });
       saveState();
       quiz.pool = applyOrder(allWords);
     }
@@ -478,8 +586,8 @@ function nextQuestion() {
   document.getElementById('word-display').textContent  = quiz.current.word;
   document.getElementById('word-no').textContent       = `No.${quiz.current.no}`;
 
-  // 発音記号
-  const phonetic = (typeof PHONETICS !== 'undefined') ? PHONETICS[quiz.current.word.toLowerCase()] : null;
+  const phonetics = currentBook ? currentBook.phonetics() : {};
+  const phonetic = phonetics[quiz.current.word.toLowerCase()] || null;
   const phoneticEl = document.getElementById('word-phonetic');
   if (phoneticEl) {
     phoneticEl.textContent = phonetic || '';
@@ -489,21 +597,18 @@ function nextQuestion() {
   const correctAnswer = quiz.current.japanese;
   const correctPos    = getPos(quiz.current.word, quiz.current.japanese);
 
-  // 同品詞のダミー候補（優先）
   const samePosCandidates = shuffle(
     quiz.allWords.filter(w =>
       w.no !== quiz.current.no && w.japanese && w.japanese !== correctAnswer &&
       getPos(w.word, w.japanese) === correctPos
     )
   );
-  // 不足分の補充用（他品詞）
   const otherCandidates = shuffle(
     quiz.allWords.filter(w =>
       w.no !== quiz.current.no && w.japanese && w.japanese !== correctAnswer &&
       getPos(w.word, w.japanese) !== correctPos
     )
   );
-  // 同品詞優先で3つ集める
   const wrongs = [...samePosCandidates, ...otherCandidates].slice(0, 3).map(w => w.japanese);
   quiz.choices = shuffle([correctAnswer, ...wrongs]);
   renderChoices();
@@ -541,8 +646,7 @@ function onAnswer(chosen, btn) {
     ? `⭕ 正解！<div class="result-word-info">${quiz.current.word} <span class="pos-badge">${pos}</span> = ${correct}</div>`
     : `✗ 不正解 — 正解：<strong>${correct}</strong><div class="result-word-info">${quiz.current.word} <span class="pos-badge">${pos}</span></div>`;
 
-  // 例文・語源・関連語を表示
-  const extras = (typeof WORD_EXTRAS !== 'undefined') ? WORD_EXTRAS[quiz.current.word.toLowerCase()] : null;
+  const extras = currentBook ? (currentBook.extras()[quiz.current.word.toLowerCase()] || null) : null;
   if (extras) {
     let extrasHtml = '<div class="word-extras">';
     if (extras.example) {
@@ -569,7 +673,6 @@ function onAnswer(chosen, btn) {
     resultEl.innerHTML += extrasHtml;
   }
 
-  // メモ表示・編集エリア
   const memoNo = quiz.current.no;
   const existingMemo = (state.memos || {})[memoNo] || '';
   resultEl.innerHTML += `
@@ -588,18 +691,17 @@ function onAnswer(chosen, btn) {
     </div>`;
 
   if (!isCorrect) {
-    // 不正解：即記録して「次へ」ボタンを表示
-    const rec = state.records[quiz.current.no] || { correct: false, attempts: 0, wrongCount: 0, lucky: false };
-    rec.attempts++;
-    rec.correct   = false;
-    rec.wrongCount = (rec.wrongCount || 0) + 1;
-    rec.lucky     = false;
-    state.records[quiz.current.no] = rec;
+    const rec = currentRecords();
+    const r = rec[quiz.current.no] || { correct: false, attempts: 0, wrongCount: 0, lucky: false };
+    r.attempts++;
+    r.correct   = false;
+    r.wrongCount = (r.wrongCount || 0) + 1;
+    r.lucky     = false;
+    rec[quiz.current.no] = r;
     quiz.sessionWrong++;
     saveState();
     showNextArea('wrong');
   } else {
-    // 正解：確信度を聞いてから記録
     quiz.sessionCorrect++;
     showNextArea('correct');
   }
@@ -625,7 +727,7 @@ function showNextArea(type) {
 // ===== Streak / Points =====
 function updateStreak() {
   const today = new Date().toISOString().slice(0, 10);
-  if (state.lastStudyDate === today) return; // already counted today
+  if (state.lastStudyDate === today) return;
 
   const yest = new Date(); yest.setDate(yest.getDate() - 1);
   const yesterdayStr = yest.toISOString().slice(0, 10);
@@ -633,22 +735,22 @@ function updateStreak() {
   if (state.lastStudyDate === yesterdayStr) {
     state.streak += 1;
   } else {
-    state.streak = 1; // reset or first time
+    state.streak = 1;
   }
   state.bestStreak    = Math.max(state.bestStreak, state.streak);
   state.lastStudyDate = today;
 
-  // Points: +10 base + streak bonus
   const bonus = state.streak >= 30 ? 20 : state.streak >= 7 ? 10 : state.streak >= 3 ? 5 : 0;
   state.points += 10 + bonus;
 }
 
 function confirmAnswer(isLucky) {
-  const rec = state.records[quiz.current.no] || { correct: false, attempts: 0, wrongCount: 0, lucky: false };
-  rec.attempts++;
-  rec.correct = true;
-  rec.lucky   = isLucky;
-  state.records[quiz.current.no] = rec;
+  const rec = currentRecords();
+  const r = rec[quiz.current.no] || { correct: false, attempts: 0, wrongCount: 0, lucky: false };
+  r.attempts++;
+  r.correct = true;
+  r.lucky   = isLucky;
+  rec[quiz.current.no] = r;
   updateStreak();
   saveState();
   nextQuestion();
@@ -669,7 +771,6 @@ function getSavedQuiz() {
 }
 
 function saveQuizAndGoBack() {
-  // 現在の問題をプールに戻して状態を保存
   const remainingPool = quiz.current ? [quiz.current, ...quiz.pool] : quiz.pool;
   if (remainingPool.length > 0) {
     localStorage.setItem('quiz_resume', JSON.stringify({
@@ -694,7 +795,7 @@ function resumeQuiz() {
   quiz.sessionWrong   = saved.sessionWrong;
   quiz.answered     = false;
   quiz.allWords     = wordsForSection(quiz.section.id);
-  quiz.pool         = saved.poolNos.map(no => WORDS.find(w => w.no === no)).filter(Boolean);
+  quiz.pool         = saved.poolNos.map(no => currentBook.words().find(w => w.no === no)).filter(Boolean);
   if (quiz.pool.length === 0) { localStorage.removeItem('quiz_resume'); return; }
   document.getElementById('quiz-section-label').textContent = quiz.section.label;
   document.getElementById('quiz-mode-label').textContent = quiz.mode === 'review' ? '⭐ バツ復習' : '通常テスト';
@@ -728,6 +829,11 @@ const TUTORIAL_STEPS = [
     icon: '👋',
     title: 'ハピクル英語塾へようこそ！',
     body: 'このアプリで英検準1級の単語を楽しく学べます。まずは基本的な使い方を説明します！',
+  },
+  {
+    icon: '📚',
+    title: '単語帳を選ぼう',
+    body: '最初に学びたい単語帳を選んでください。\n単語EXやパス単など、複数の単語帳に対応しています！',
   },
   {
     icon: '📖',
@@ -812,36 +918,47 @@ document.getElementById('btn-tutorial-open').addEventListener('click', openTutor
 
 // ===== My Page =====
 function openMyPage() {
-  // プロフィール表示
   document.getElementById('profile-name-text').textContent = userName;
   document.getElementById('profile-email').textContent = userId ? `ID: ${userId}` : '';
   document.getElementById('profile-name-display').classList.remove('hidden');
   document.getElementById('profile-name-edit').classList.add('hidden');
 
-  // 努力量
-  const records = state.records;
-  let totalAttempts = 0, totalAnsweredCorrect = 0, totalWrongCount = 0, masteredCount = 0;
-  WORDS.filter(w => w.japanese).forEach(w => {
-    const r = records[w.no];
+  if (!currentBook) { showScreen('screen-mypage'); return; }
+
+  const rec = currentRecords();
+  const words = currentBook.words().filter(w => w.japanese);
+
+  // 現在の単語帳の努力量
+  let totalAttempts = 0, totalWrongCount = 0, masteredCount = 0;
+  words.forEach(w => {
+    const r = rec[w.no];
     if (!r) return;
-    totalAttempts       += r.attempts  || 0;
-    totalWrongCount     += r.wrongCount || 0;
+    totalAttempts   += r.attempts   || 0;
+    totalWrongCount += r.wrongCount || 0;
     if (r.correct) masteredCount++;
   });
-  totalAnsweredCorrect = totalAttempts - totalWrongCount;
+  const totalAnsweredCorrect = totalAttempts - totalWrongCount;
   const accuracy = totalAttempts > 0 ? Math.round((totalAnsweredCorrect / totalAttempts) * 100) : 0;
 
+  // 全単語帳合計の習得語数
+  const allMastered = BOOKS.reduce((sum, book) => {
+    const br = state.bookRecords[book.id] || {};
+    return sum + book.words().filter(w => w.japanese && br[w.no]?.correct).length;
+  }, 0);
+  const allTotal = BOOKS.reduce((sum, book) => sum + book.words().filter(w => w.japanese).length, 0);
+
   document.getElementById('effort-grid').innerHTML = `
-    <div class="stat-item"><div class="stat-num">${masteredCount}</div><div class="stat-label">単語マスター数</div></div>
+    <div class="stat-item"><div class="stat-num">${masteredCount}</div><div class="stat-label">${currentBook.name}<br>習得語数</div></div>
     <div class="stat-item"><div class="stat-num">${totalAttempts}</div><div class="stat-label">総回答数</div></div>
     <div class="stat-item"><div class="stat-num">${accuracy}<span style="font-size:1rem">%</span></div><div class="stat-label">正答率</div></div>
     <div class="stat-item"><div class="stat-num">${totalWrongCount}</div><div class="stat-label">バツのある単語</div></div>
+    <div class="stat-item stat-item-wide"><div class="stat-num">${allMastered}<span style="font-size:1rem"> / ${allTotal}</span></div><div class="stat-label">全単語帳 合計習得語数</div></div>
   `;
 
-  // セクション別進捗
+  // セクション別進捗（現在の単語帳）
   const list = document.getElementById('section-progress-list');
   list.innerHTML = '';
-  SECTIONS.forEach(sec => {
+  currentBook.sections.forEach(sec => {
     const { correct, total } = getSectionStats(sec.id);
     const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
     const cleared = correct === total && total > 0;
@@ -857,9 +974,7 @@ function openMyPage() {
     list.appendChild(item);
   });
 
-  // メモ一覧
   renderMemoList();
-
   showScreen('screen-mypage');
 }
 
@@ -872,10 +987,10 @@ function renderMemoList() {
     list.innerHTML = '<p class="empty-memo">まだメモはありません。</p>';
     return;
   }
-  // word番号順にソート
   entries.sort(([a], [b]) => a.localeCompare(b));
+  const allWords = currentBook ? currentBook.words() : [];
   list.innerHTML = entries.map(([no, memo]) => {
-    const word = WORDS.find(w => w.no === no);
+    const word = allWords.find(w => w.no === no);
     if (!word) return '';
     return `<div class="memo-list-item">
       <div class="memo-list-word-row">
@@ -897,25 +1012,37 @@ function openStats() {
 
   renderStreakWeek();
 
-  // Effort stats
+  if (!currentBook) { showScreen('screen-stats'); return; }
+
+  const rec = currentRecords();
+  const words = currentBook.words().filter(w => w.japanese);
+
+  // 現在の単語帳の統計
   let totalAttempts = 0, totalWrongCount = 0, masteredCount = 0;
-  WORDS.filter(w => w.japanese).forEach(w => {
-    const r = state.records[w.no];
+  words.forEach(w => {
+    const r = rec[w.no];
     if (!r) return;
-    totalAttempts  += r.attempts   || 0;
+    totalAttempts   += r.attempts   || 0;
     totalWrongCount += r.wrongCount || 0;
     if (r.correct) masteredCount++;
   });
   const totalDays = Object.keys(state.dailyLog).length;
 
+  // 全単語帳合計の習得語数
+  const allMastered = BOOKS.reduce((sum, book) => {
+    const br = state.bookRecords[book.id] || {};
+    return sum + book.words().filter(w => w.japanese && br[w.no]?.correct).length;
+  }, 0);
+  const allTotal = BOOKS.reduce((sum, book) => sum + book.words().filter(w => w.japanese).length, 0);
+
   document.getElementById('stats-effort-grid').innerHTML = `
-    <div class="stat-item"><div class="stat-num">${masteredCount}</div><div class="stat-label">習得単語数</div></div>
+    <div class="stat-item"><div class="stat-num">${masteredCount}</div><div class="stat-label">${currentBook.name}<br>習得語数</div></div>
     <div class="stat-item"><div class="stat-num">${totalDays}</div><div class="stat-label">学習した日数</div></div>
     <div class="stat-item"><div class="stat-num">${totalAttempts}</div><div class="stat-label">累計解答数</div></div>
     <div class="stat-item"><div class="stat-num">${totalAttempts - totalWrongCount}</div><div class="stat-label">正解数</div></div>
+    <div class="stat-item stat-item-wide"><div class="stat-num">${allMastered}<span style="font-size:1rem"> / ${allTotal}</span></div><div class="stat-label">全単語帳 合計習得語数</div></div>
   `;
 
-  // Chart
   renderLineChart(state.dailyLog, document.getElementById('stats-chart'));
   showScreen('screen-stats');
 }
@@ -953,6 +1080,7 @@ async function saveName() {
     await db.collection('users').doc(currentUser.uid).update({ name: newName });
     userName = newName;
     document.getElementById('home-username').textContent = userName;
+    document.getElementById('bookpicker-username').textContent = userName;
     document.getElementById('admin-teacher-name').textContent = `講師: ${userName}`;
     document.getElementById('profile-name-text').textContent = userName;
     document.getElementById('profile-name-display').classList.remove('hidden');
@@ -972,24 +1100,20 @@ function openReport(context) {
   reportContext = context || null;
   const isQuiz = reportContext !== null;
 
-  // Reset
   document.getElementById('report-message').value = '';
   document.getElementById('report-char-count').textContent = '0文字（20文字以上必要）';
   document.getElementById('report-char-count').className = 'report-char-count';
   document.getElementById('report-error').classList.add('hidden');
 
-  // Mode-specific UI
   document.getElementById('report-quiz-options').classList.toggle('hidden', !isQuiz);
   document.getElementById('report-type-group').classList.toggle('hidden', isQuiz);
 
   if (isQuiz) {
-    // Quiz: radio — reset to first, hide textarea until "その他" is selected
     document.querySelectorAll('input[name="quiz-report-type"]').forEach((r, i) => { r.checked = i === 0; });
     document.getElementById('report-message').classList.add('hidden');
     document.getElementById('report-char-count').classList.add('hidden');
     document.getElementById('btn-submit-report').disabled = false;
   } else {
-    // General: type buttons + textarea always visible
     document.querySelectorAll('.report-type-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
     document.getElementById('report-message').classList.remove('hidden');
     document.getElementById('report-char-count').classList.remove('hidden');
@@ -1037,6 +1161,7 @@ async function submitReport() {
       wordNo:   reportContext?.wordNo   || null,
       word:     reportContext?.word     || null,
       japanese: reportContext?.japanese || null,
+      bookId:   currentBook?.id        || null,
       userId:   currentUser.uid,
       userName: userName,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1053,7 +1178,6 @@ async function submitReport() {
   }
 }
 
-// クイズラジオボタン切替：「その他」のときだけテキストエリアを表示
 document.getElementById('report-quiz-options').addEventListener('change', (e) => {
   if (e.target.type !== 'radio') return;
   const isOther = e.target.value === 'other';
@@ -1080,7 +1204,6 @@ document.getElementById('report-message').addEventListener('input', (e) => {
   const countEl = document.getElementById('report-char-count');
   countEl.textContent = len < 20 ? `${len}文字（20文字以上必要）` : `${len}文字 ✓`;
   countEl.className   = 'report-char-count' + (len >= 20 ? ' valid' : '');
-  // クイズの「その他」モードでも汎用モードでも送信ボタンを制御
   const isQuizOther = reportContext !== null &&
     document.querySelector('input[name="quiz-report-type"]:checked')?.value === 'other';
   if (reportContext === null || isQuizOther) {
@@ -1104,6 +1227,9 @@ document.getElementById('btn-report-quiz').addEventListener('click', () => {
 document.getElementById('btn-report-general').addEventListener('click', () => openReport(null));
 
 // ===== Admin =====
+// 管理画面で現在表示中の単語帳ID
+let adminBookId = 'ex';
+
 async function loadAdminData() {
   const wrap = document.getElementById('admin-table-wrap');
   wrap.innerHTML = '<p class="loading-text">データを読み込み中...</p>';
@@ -1114,17 +1240,18 @@ async function loadAdminData() {
     const students = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
     students.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
 
-    // Stats bar
     const today = new Date().toLocaleDateString('ja-JP');
+    const adminBook = BOOKS.find(b => b.id === adminBookId) || BOOKS[0];
     document.getElementById('admin-stats-bar').innerHTML = `
       <div class="stat-item"><div class="stat-num">${students.length}</div><div class="stat-label">登録生徒数</div></div>
       <div class="stat-item"><div class="stat-num">${students.filter(s => s.updatedAt?.toDate().toLocaleDateString('ja-JP') === today).length}</div><div class="stat-label">本日学習</div></div>
-      <div class="stat-item"><div class="stat-num">${students.filter(s => isCleared(s.records)).length}</div><div class="stat-label">全問制覇</div></div>
+      <div class="stat-item"><div class="stat-num">${students.filter(s => isCleared(getStudentBookRecords(s, adminBookId), adminBook)).length}</div><div class="stat-label">全問制覇</div></div>
     `;
 
     adminStudentsMap = {};
     students.forEach(s => { adminStudentsMap[s.uid] = s; });
 
+    renderAdminBookTabs();
     renderAdminTable(students);
     setupAdminSearch(students);
   } catch (e) {
@@ -1132,13 +1259,48 @@ async function loadAdminData() {
   }
 }
 
-function isCleared(records) {
-  if (!records) return false;
-  return WORDS.filter(w => w.japanese).every(w => records[w.no]?.correct);
+// 生徒データから指定単語帳のrecordsを取得（マイグレーション考慮）
+function getStudentBookRecords(student, bookId) {
+  if (bookId === 'ex') {
+    // records_exがあればそれを使い、なければrecords（旧形式）にフォールバック
+    return student.records_ex || student.records || {};
+  }
+  return student[`records_${bookId}`] || {};
 }
 
-function calcSectionProgress(records, sectionId) {
-  const words   = WORDS.filter(w => w.section === sectionId && w.japanese);
+function renderAdminBookTabs() {
+  const existing = document.getElementById('admin-book-tab-bar');
+  if (existing) return; // 既に存在する場合はスキップ
+
+  const toolbar = document.querySelector('#admin-panel-students .admin-toolbar');
+  if (!toolbar) return;
+
+  const tabBar = document.createElement('div');
+  tabBar.id = 'admin-book-tab-bar';
+  tabBar.className = 'admin-book-tab-bar';
+  BOOKS.forEach(book => {
+    const btn = document.createElement('button');
+    btn.className = 'admin-book-tab-btn' + (book.id === adminBookId ? ' active' : '');
+    btn.textContent = `${book.icon} ${book.name}`;
+    btn.addEventListener('click', () => {
+      adminBookId = book.id;
+      document.querySelectorAll('.admin-book-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const students = Object.values(adminStudentsMap);
+      renderAdminTable(students);
+    });
+    tabBar.appendChild(btn);
+  });
+  toolbar.parentNode.insertBefore(tabBar, toolbar);
+}
+
+function isCleared(records, book) {
+  if (!records || !book) return false;
+  return book.words().filter(w => w.japanese).every(w => records[w.no]?.correct);
+}
+
+function calcSectionProgress(records, sectionId, book) {
+  const words   = book.words().filter(w => w.section === sectionId && w.japanese);
   const correct = words.filter(w => records?.[w.no]?.correct).length;
   return { correct, total: words.length };
 }
@@ -1150,13 +1312,16 @@ function renderAdminTable(students) {
     return;
   }
 
+  const adminBook = BOOKS.find(b => b.id === adminBookId) || BOOKS[0];
+  const totalWords = adminBook.words().filter(w => w.japanese).length;
+
   let html = `
     <div class="admin-table-scroll">
     <table class="admin-table">
       <thead>
         <tr>
           <th class="col-name">氏名</th>
-          ${SECTIONS.map(s => `<th class="col-sec">${s.label.replace('テスト ', 'T')}</th>`).join('')}
+          ${adminBook.sections.map(s => `<th class="col-sec">${s.label.replace('テスト ', 'T')}</th>`).join('')}
           <th class="col-total">合計</th>
           <th class="col-wrong">バツ数</th>
           <th class="col-update">最終更新</th>
@@ -1165,21 +1330,19 @@ function renderAdminTable(students) {
       <tbody>
   `;
 
-  const totalWords = WORDS.filter(w => w.japanese).length;
-
   students.forEach(student => {
-    const records = student.records || {};
-    const totalCorrect = WORDS.filter(w => w.japanese && records[w.no]?.correct).length;
-    const totalWrong   = WORDS.filter(w => w.japanese && (records[w.no]?.wrongCount || 0) > 0).length;
-    const totalPct     = Math.round((totalCorrect / totalWords) * 100);
+    const records = getStudentBookRecords(student, adminBookId);
+    const totalCorrect = adminBook.words().filter(w => w.japanese && records[w.no]?.correct).length;
+    const totalWrong   = adminBook.words().filter(w => w.japanese && (records[w.no]?.wrongCount || 0) > 0).length;
+    const totalPct     = totalWords > 0 ? Math.round((totalCorrect / totalWords) * 100) : 0;
     const updatedAt    = student.updatedAt?.toDate ? student.updatedAt.toDate().toLocaleDateString('ja-JP') : '—';
 
     html += `<tr>
       <td class="col-name col-name-link" onclick="openStudentDetail('${student.uid}')"><strong>${student.name || '—'}</strong><br><small>${student.userId ? 'ID: ' + student.userId : ''}</small></td>
     `;
 
-    SECTIONS.forEach(sec => {
-      const { correct, total } = calcSectionProgress(records, sec.id);
+    adminBook.sections.forEach(sec => {
+      const { correct, total } = calcSectionProgress(records, sec.id, adminBook);
       const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
       const cls = correct === total ? 'cell-perfect'
                 : pct >= 80 ? 'cell-good'
@@ -1210,11 +1373,10 @@ function openStudentDetail(uid) {
   const student = adminStudentsMap[uid];
   if (!student) return;
   currentDetailUid = uid;
-  adminCalViewDate  = new Date(); // 当月にリセット
+  adminCalViewDate  = new Date();
 
   document.getElementById('detail-student-name').textContent = student.name || '—';
 
-  // ログイン情報（ID・パスワード）
   document.getElementById('detail-student-id').textContent = student.userId || '—';
   const pwEl = document.getElementById('detail-student-pw');
   pwEl.textContent = '●●●●●●';
@@ -1229,7 +1391,6 @@ function openStudentDetail(uid) {
   document.getElementById('student-detail-modal').classList.remove('hidden');
 }
 
-// パスワード表示切替
 function toggleDetailPw() {
   const pwEl  = document.getElementById('detail-student-pw');
   const btnEl = document.getElementById('btn-pw-toggle');
@@ -1244,7 +1405,6 @@ function toggleDetailPw() {
   }
 }
 
-// 月カレンダーナビゲーション（onclick属性から呼ばれる）
 function calNavMonth(delta) {
   adminCalViewDate.setMonth(adminCalViewDate.getMonth() + delta);
   const student = adminStudentsMap[currentDetailUid];
@@ -1256,7 +1416,7 @@ function renderCalendarView(dailyLog, container) {
   const month = adminCalViewDate.getMonth();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
+  const firstDow = new Date(year, month, 1).getDay();
   const lastDay  = new Date(year, month + 1, 0).getDate();
 
   const values = Object.values(dailyLog).map(d => d.mastered || 0);
@@ -1277,7 +1437,6 @@ function renderCalendarView(dailyLog, container) {
     <div class="monthly-cal-grid">
   `;
 
-  // 月初の空白セル
   for (let i = 0; i < firstDow; i++) {
     html += '<div class="mday-cell mday-empty"></div>';
   }
@@ -1352,11 +1511,15 @@ function renderLineChart(dailyLog, container) {
     ${xIdxs.map(i => `<text x="${xs(i).toFixed(1)}" y="${H - PB + 14}" class="chart-label" text-anchor="middle">${entries[i][0].slice(5)}</text>`).join('')}
   </svg>`;
 
-  container.innerHTML = `<div class="chart-wrap"><p class="chart-title">習得語数の推移</p>${svg}</div>`;
+  container.innerHTML = `<div class="chart-wrap"><p class="chart-title">習得語数の推移（全単語帳合計）</p>${svg}</div>`;
 }
 
 function setupAdminSearch(students) {
-  document.getElementById('admin-search').addEventListener('input', (e) => {
+  const searchEl = document.getElementById('admin-search');
+  // 既存のリスナーを除去してから追加
+  const newSearchEl = searchEl.cloneNode(true);
+  searchEl.parentNode.replaceChild(newSearchEl, searchEl);
+  newSearchEl.addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
     const filtered = q ? students.filter(s => (s.name || '').toLowerCase().includes(q) || (s.userId || '').toLowerCase().includes(q)) : students;
     renderAdminTable(filtered);
@@ -1380,7 +1543,11 @@ function renderAdminWordList() {
   const searchVal = (document.getElementById('admin-word-search').value || '').trim().toLowerCase();
   const sectionFilter = document.getElementById('admin-word-section-filter').value;
 
-  const filtered = WORDS.filter(w => {
+  // 管理画面の単語一覧は単語EX固定（将来的に拡張可能）
+  const adminBook = BOOKS.find(b => b.id === 'ex') || BOOKS[0];
+  const allWords = adminBook.words();
+
+  const filtered = allWords.filter(w => {
     if (!w.japanese) return false;
     if (sectionFilter && w.section !== sectionFilter) return false;
     if (searchVal) {
@@ -1389,14 +1556,13 @@ function renderAdminWordList() {
     return true;
   });
 
-  document.getElementById('admin-word-count').textContent = `${filtered.length} 語 表示中（全 ${WORDS.filter(w => w.japanese).length} 語）`;
+  document.getElementById('admin-word-count').textContent = `${filtered.length} 語 表示中（全 ${allWords.filter(w => w.japanese).length} 語）`;
 
   if (filtered.length === 0) {
     document.getElementById('admin-word-list-wrap').innerHTML = '<p class="loading-text">該当する単語がありません。</p>';
     return;
   }
 
-  // セクション別にグループ化
   const bySection = {};
   filtered.forEach(w => {
     if (!bySection[w.section]) bySection[w.section] = [];
@@ -1404,7 +1570,7 @@ function renderAdminWordList() {
   });
 
   let html = '';
-  SECTIONS.forEach(sec => {
+  adminBook.sections.forEach(sec => {
     const words = bySection[sec.id];
     if (!words || words.length === 0) return;
     html += `<div class="word-list-section">
@@ -1455,13 +1621,12 @@ document.getElementById('word-display').addEventListener('click', () => {
   utter.lang = 'en-US';
   utter.rate = 0.85;
   window.speechSynthesis.speak(utter);
-  // タップ時のフラッシュ演出
   const el = document.getElementById('word-display');
   el.classList.add('word-tap-flash');
   setTimeout(() => el.classList.remove('word-tap-flash'), 300);
 });
 
-// ===== Memo functions (global, called from onclick in dynamic HTML) =====
+// ===== Memo functions =====
 function toggleMemoEdit(no) {
   const editArea = document.getElementById(`memo-edit-${no}`);
   if (editArea) editArea.classList.toggle('hidden');
@@ -1497,7 +1662,10 @@ function saveMemo(no) {
 }
 
 // ===== Navigation =====
-document.getElementById('btn-back-mypage').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
+document.getElementById('btn-back-mypage').addEventListener('click', () => {
+  if (currentBook) { renderHome(); showScreen('screen-home'); }
+  else { renderBookPicker(); showScreen('screen-bookpicker'); }
+});
 document.getElementById('btn-edit-name').addEventListener('click', () => {
   document.getElementById('edit-name-input').value = userName;
   document.getElementById('profile-name-display').classList.add('hidden');
@@ -1511,6 +1679,7 @@ document.getElementById('btn-cancel-name').addEventListener('click', () => {
 document.getElementById('btn-save-name').addEventListener('click', saveName);
 
 document.getElementById('btn-back-home').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
+document.getElementById('btn-back-bookpicker').addEventListener('click', () => { renderBookPicker(); showScreen('screen-bookpicker'); });
 document.getElementById('btn-back-mode').addEventListener('click', saveQuizAndGoBack);
 document.getElementById('btn-start-resume').addEventListener('click', resumeQuiz);
 document.getElementById('btn-start-normal').addEventListener('click', () => startQuiz('normal'));
@@ -1529,7 +1698,8 @@ document.getElementById('btn-reset').addEventListener('click', resetState);
 
 // ===== Bottom Tab Bar =====
 document.getElementById('tab-test').addEventListener('click', () => {
-  renderHome(); showScreen('screen-home');
+  if (currentBook) { renderHome(); showScreen('screen-home'); }
+  else { renderBookPicker(); showScreen('screen-bookpicker'); }
 });
 document.getElementById('tab-stats').addEventListener('click', () => {
   openStats();
@@ -1551,13 +1721,14 @@ function startFlashcard(mode) {
   fc.index   = 0;
 
   const allWords = wordsForSection(fc.section.id);
+  const rec = currentRecords();
   const applyOrder = arr => quiz.orderMode === 'sequential'
     ? [...arr].sort((a, b) => a.no.localeCompare(b.no))
     : shuffle(arr);
 
   let raw;
-  if (mode === 'review')  raw = allWords.filter(w => (state.records[w.no]?.wrongCount || 0) > 0 || state.records[w.no]?.fcUnknown === true);
-  else if (mode === 'lucky') raw = allWords.filter(w => state.records[w.no]?.lucky === true);
+  if (mode === 'review')       raw = allWords.filter(w => (rec[w.no]?.wrongCount || 0) > 0 || rec[w.no]?.fcUnknown === true);
+  else if (mode === 'lucky')   raw = allWords.filter(w => rec[w.no]?.lucky === true);
   else raw = allWords;
 
   fc.pool  = applyOrder(raw);
@@ -1591,8 +1762,8 @@ function renderFCCard() {
 function renderFCContent() {
   const mainEl     = document.getElementById('fc-main');
   const phoneticEl = document.getElementById('fc-phonetic');
-  const extras  = (typeof WORD_EXTRAS !== 'undefined') ? WORD_EXTRAS[fc.current.word.toLowerCase()]   : null;
-  const phonetic = (typeof PHONETICS  !== 'undefined') ? PHONETICS[fc.current.word.toLowerCase()]    : null;
+  const extras   = currentBook ? (currentBook.extras()[fc.current.word.toLowerCase()]   || null) : null;
+  const phonetic  = currentBook ? (currentBook.phonetics()[fc.current.word.toLowerCase()] || null) : null;
 
   phoneticEl.textContent = '';
   switch (fc.tab) {
@@ -1640,7 +1811,7 @@ function fcToggleExplain() {
   const btn   = document.getElementById('fc-btn-explain');
   fc.explainOpen = !fc.explainOpen;
   if (fc.explainOpen) {
-    const extras = (typeof WORD_EXTRAS !== 'undefined') ? WORD_EXTRAS[fc.current.word.toLowerCase()] : null;
+    const extras = currentBook ? (currentBook.extras()[fc.current.word.toLowerCase()] || null) : null;
     const pos = getPos(fc.current.word, fc.current.japanese);
     let html = `<div class="extras-label">${fc.current.word} <span class="pos-badge">${pos}</span> = ${fc.current.japanese}</div>`;
     if (extras?.etymology) {
@@ -1670,18 +1841,18 @@ function fcToggleExplain() {
 
 function fcMark(known) {
   if (!known) fc.unknownNos.add(fc.current.no);
-  // わかった/わからないをrecordに永続化
-  if (!state.records[fc.current.no]) {
-    state.records[fc.current.no] = { correct: false, attempts: 0, wrongCount: 0, lucky: false };
+  const rec = currentRecords();
+  if (!rec[fc.current.no]) {
+    rec[fc.current.no] = { correct: false, attempts: 0, wrongCount: 0, lucky: false };
   }
-  state.records[fc.current.no].fcUnknown = !known;
+  rec[fc.current.no].fcUnknown = !known;
   fc.index++;
   renderFCCard();
 }
 
 function showFCComplete() {
   lastCompleteType = 'flashcard';
-  saveRecords();  // わかった/わからないをFirestoreに保存
+  saveRecords();
   const unknownCount = fc.unknownNos.size;
   const knownCount   = fc.total - unknownCount;
 
@@ -1761,12 +1932,15 @@ document.getElementById('fc-btn-known').addEventListener('click',   () => fcMark
 document.getElementById('btn-back-fc').addEventListener('click', () => openMode(quiz.section));
 
 document.getElementById('btn-review-all').addEventListener('click', () => {
-  const allWrong = WORDS.filter(w => w.japanese && (state.records[w.no]?.wrongCount || 0) > 0);
+  if (!currentBook) return;
+  const rec = currentRecords();
+  const allWrong = currentBook.words().filter(w => w.japanese && (rec[w.no]?.wrongCount || 0) > 0);
   if (allWrong.length === 0) { alert('バツのついた単語はありません。'); return; }
   quiz.section = { id: '__all__', label: '全範囲バツ復習', range: '全セクション' };
   quiz.mode = 'review'; quiz.sessionCorrect = 0; quiz.sessionWrong = 0; quiz.answered = false;
-  quiz.allWords = WORDS.filter(w => w.japanese);
+  quiz.allWords = currentBook.words().filter(w => w.japanese);
   quiz.pool = shuffle(allWrong);
+  quiz.totalPool = quiz.pool.length;
   document.getElementById('quiz-section-label').textContent = '全範囲';
   document.getElementById('quiz-mode-label').textContent = '⭐ バツ復習';
   showScreen('screen-quiz');
