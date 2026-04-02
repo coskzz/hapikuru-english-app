@@ -243,6 +243,7 @@ html, body { height: 100%; font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic'
 .wl-no { color: #bbb; font-size: .78rem; width: 52px; }
 .wl-en { font-weight: 600; color: #333; }
 .wl-ja { color: #555; }
+.wl-ja-empty { color: #ccc; font-style: italic; }
 
 .admin-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .admin-table {

@@ -1610,7 +1610,6 @@ function renderAdminWordList() {
   const allWords = adminBook.words();
 
   const filtered = allWords.filter(w => {
-    if (!w.japanese) return false;
     if (sectionFilter && w.section !== sectionFilter) return false;
     if (searchVal) {
       return w.word.toLowerCase().includes(searchVal) || w.japanese.includes(searchVal) || w.no.includes(searchVal);
@@ -1618,7 +1617,7 @@ function renderAdminWordList() {
     return true;
   });
 
-  document.getElementById('admin-word-count').textContent = `${filtered.length} 語 表示中（全 ${allWords.filter(w => w.japanese).length} 語）`;
+  document.getElementById('admin-word-count').textContent = `${filtered.length} 語 表示中（全 ${allWords.length} 語）`;
 
   if (filtered.length === 0) {
     document.getElementById('admin-word-list-wrap').innerHTML = '<p class="loading-text">該当する単語がありません。</p>';
@@ -1641,7 +1640,7 @@ function renderAdminWordList() {
         <thead><tr><th class="wl-no">No.</th><th class="wl-en">英単語</th><th class="wl-ja">日本語訳</th></tr></thead>
         <tbody>`;
     words.forEach(w => {
-      html += `<tr><td class="wl-no">${w.no}</td><td class="wl-en">${w.word}</td><td class="wl-ja">${w.japanese}</td></tr>`;
+      html += `<tr><td class="wl-no">${w.no}</td><td class="wl-en">${w.word}</td><td class="wl-ja${w.japanese ? '' : ' wl-ja-empty'}">${w.japanese || '—'}</td></tr>`;
     });
     html += `</tbody></table></div>`;
   });
