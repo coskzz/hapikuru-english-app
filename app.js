@@ -1562,16 +1562,51 @@ function switchAdminTab(tab) {
   document.getElementById('admin-panel-words').classList.toggle('hidden', isStudents);
   document.getElementById('admin-tab-students').classList.toggle('active', isStudents);
   document.getElementById('admin-tab-words').classList.toggle('active', !isStudents);
-  if (!isStudents) renderAdminWordList();
+  if (!isStudents) {
+    renderAdminWordBookTabs();
+    updateAdminWordSectionFilter();
+    renderAdminWordList();
+  }
 }
 
 // ===== Admin Word List =====
+let adminWordBookId = 'ex';
+
+function renderAdminWordBookTabs() {
+  const tabBar = document.getElementById('admin-word-book-tab-bar');
+  tabBar.innerHTML = '';
+  BOOKS.forEach(book => {
+    const btn = document.createElement('button');
+    btn.className = 'admin-book-tab-btn' + (book.id === adminWordBookId ? ' active' : '');
+    btn.textContent = `${book.icon} ${book.name}`;
+    btn.addEventListener('click', () => {
+      adminWordBookId = book.id;
+      document.getElementById('admin-word-search').value = '';
+      renderAdminWordBookTabs();
+      updateAdminWordSectionFilter();
+      renderAdminWordList();
+    });
+    tabBar.appendChild(btn);
+  });
+}
+
+function updateAdminWordSectionFilter() {
+  const book = BOOKS.find(b => b.id === adminWordBookId) || BOOKS[0];
+  const sel = document.getElementById('admin-word-section-filter');
+  sel.innerHTML = '<option value="">全セクション</option>';
+  book.sections.forEach(sec => {
+    const opt = document.createElement('option');
+    opt.value = sec.id;
+    opt.textContent = `${sec.label}（${sec.range}）`;
+    sel.appendChild(opt);
+  });
+}
+
 function renderAdminWordList() {
   const searchVal = (document.getElementById('admin-word-search').value || '').trim().toLowerCase();
   const sectionFilter = document.getElementById('admin-word-section-filter').value;
 
-  // 管理画面の単語一覧は単語EX固定（将来的に拡張可能）
-  const adminBook = BOOKS.find(b => b.id === 'ex') || BOOKS[0];
+  const adminBook = BOOKS.find(b => b.id === adminWordBookId) || BOOKS[0];
   const allWords = adminBook.words();
 
   const filtered = allWords.filter(w => {
