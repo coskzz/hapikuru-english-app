@@ -1253,3 +1253,33 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
   cursor: pointer;
 }
 .col-action { white-space: nowrap; text-align: center; }
+
+/* ===== Profile - ID row ===== */
+.profile-id-row {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed #FFD6E8;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.profile-id-label {
+  font-size: .82rem;
+  color: #888;
+}
+.profile-id-text {
+  font-size: .92rem;
+  font-weight: 600;
+  color: #333;
+  font-family: Menlo, Consolas, monospace;
+}
+
+/* ===== Edit ID modal ===== */
+.edit-id-desc {
+  font-size: .82rem;
+  color: #555;
+  line-height: 1.6;
+  margin: 6px 0 14px;
+}
+.edit-id-desc strong { color: #D63F70; }

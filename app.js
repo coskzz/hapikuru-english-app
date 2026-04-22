@@ -319,16 +319,25 @@ function idToEmail(id) {
   return id.toLowerCase().replace(/\s+/g, '_') + '@hapikuru.local';
 }
 
+// ログイン入力をメールアドレスとして解決する
+// - `@` を含めばそのままメールとして扱う（旧Gmail直登録ユーザー救済）
+// - 含まなければ idToEmail() で `<id>@hapikuru.local` に変換
+function resolveLoginEmail(input) {
+  const trimmed = (input || '').trim();
+  if (trimmed.includes('@')) return trimmed.toLowerCase();
+  return idToEmail(trimmed);
+}
+
 // ===== Login =====
 document.getElementById('btn-login').addEventListener('click', async () => {
-  const userId   = document.getElementById('login-id').value.trim();
-  const password = document.getElementById('login-password').value;
-  const errEl    = document.getElementById('login-error');
+  const loginInput = document.getElementById('login-id').value.trim();
+  const password   = document.getElementById('login-password').value;
+  const errEl      = document.getElementById('login-error');
   errEl.classList.add('hidden');
-  if (!userId || !password) { showAuthError(errEl, 'IDとパスワードを入力してください。'); return; }
+  if (!loginInput || !password) { showAuthError(errEl, 'IDとパスワードを入力してください。'); return; }
   try {
     document.getElementById('btn-login').textContent = '...';
-    await auth.signInWithEmailAndPassword(idToEmail(userId), password);
+    await auth.signInWithEmailAndPassword(resolveLoginEmail(loginInput), password);
   } catch (e) {
     document.getElementById('btn-login').textContent = 'ログイン';
     showAuthError(errEl, authErrorMsg(e.code));
@@ -932,7 +941,9 @@ let mypageBookId = null;
 
 function openMyPage() {
   document.getElementById('profile-name-text').textContent = userName;
-  document.getElementById('profile-email').textContent = userId ? `ID: ${userId}` : '';
+  document.getElementById('profile-email').textContent = '';
+  const idTextEl = document.getElementById('profile-id-text');
+  if (idTextEl) idTextEl.textContent = userId || '—';
   document.getElementById('profile-name-display').classList.remove('hidden');
   document.getElementById('profile-name-edit').classList.add('hidden');
 
@@ -2002,6 +2013,90 @@ document.getElementById('btn-cancel-name').addEventListener('click', () => {
   document.getElementById('profile-name-edit').classList.add('hidden');
 });
 document.getElementById('btn-save-name').addEventListener('click', saveName);
+
+// ===== Self ID Change =====
+function openEditIdModal() {
+  document.getElementById('edit-id-new').value = '';
+  document.getElementById('edit-id-password').value = '';
+  const errEl = document.getElementById('edit-id-error');
+  errEl.textContent = '';
+  errEl.classList.add('hidden');
+  document.getElementById('edit-id-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('edit-id-new').focus(), 50);
+}
+function closeEditIdModal() {
+  document.getElementById('edit-id-modal').classList.add('hidden');
+}
+
+document.getElementById('btn-edit-id').addEventListener('click', openEditIdModal);
+document.getElementById('btn-close-edit-id').addEventListener('click', closeEditIdModal);
+document.getElementById('btn-cancel-edit-id').addEventListener('click', closeEditIdModal);
+
+document.getElementById('btn-submit-edit-id').addEventListener('click', async () => {
+  const newId    = document.getElementById('edit-id-new').value.trim();
+  const password = document.getElementById('edit-id-password').value;
+  const errEl    = document.getElementById('edit-id-error');
+  const btnEl    = document.getElementById('btn-submit-edit-id');
+  errEl.classList.add('hidden');
+
+  if (!newId)                        { showAuthError(errEl, '新しいIDを入力してください。'); return; }
+  if (newId.includes('@'))           { showAuthError(errEl, 'IDに @ は使えません。'); return; }
+  if (newId === userId)              { showAuthError(errEl, '現在のIDと同じです。'); return; }
+  if (!password)                     { showAuthError(errEl, '現在のパスワードを入力してください。'); return; }
+  if (!currentUser)                  { showAuthError(errEl, 'ログイン状態を確認できません。'); return; }
+
+  try {
+    btnEl.disabled = true;
+    btnEl.textContent = '変更中...';
+
+    // 1. 重複チェック（Firestore users/userId）
+    const dup = await db.collection('users').where('userId', '==', newId).get();
+    if (!dup.empty) {
+      showAuthError(errEl, 'このIDはすでに使用されています。');
+      return;
+    }
+
+    // 2. 再認証（現在のメール + パスワード）
+    const currentEmail = currentUser.email;
+    const cred = firebase.auth.EmailAuthProvider.credential(currentEmail, password);
+    await currentUser.reauthenticateWithCredential(cred);
+
+    // 3. Firebase Auth のメールアドレスを更新
+    const newEmail = idToEmail(newId);
+    await currentUser.updateEmail(newEmail);
+
+    // 4. Firestore のドキュメントを更新
+    await db.collection('users').doc(currentUser.uid).set(
+      { userId: newId, password },
+      { merge: true }
+    );
+
+    userId = newId;
+    const idTextEl = document.getElementById('profile-id-text');
+    if (idTextEl) idTextEl.textContent = newId;
+
+    closeEditIdModal();
+    alert('IDを変更しました。次回ログインからは新しいIDをご利用ください。');
+  } catch (e) {
+    const code = e.code || '';
+    let msg;
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      msg = '現在のパスワードが正しくありません。';
+    } else if (code === 'auth/email-already-in-use') {
+      msg = 'このIDはすでに使用されています。';
+    } else if (code === 'auth/requires-recent-login') {
+      msg = '再ログインが必要です。一度ログアウトしてからやり直してください。';
+    } else if (code === 'auth/operation-not-allowed') {
+      msg = 'IDの変更がサーバー側で許可されていません。管理者に連絡してください。';
+    } else {
+      msg = authErrorMsg(code) || `エラーが発生しました（${code || e.message}）`;
+    }
+    showAuthError(errEl, msg);
+  } finally {
+    btnEl.disabled = false;
+    btnEl.textContent = '変更する';
+  }
+});
 
 document.getElementById('btn-back-home').addEventListener('click', () => { renderHome(); showScreen('screen-home'); });
 document.getElementById('btn-back-bookpicker').addEventListener('click', () => { renderBookPicker(); showScreen('screen-bookpicker'); });
