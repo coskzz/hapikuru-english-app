@@ -1,5 +1,6 @@
 // ===== Firebase Init =====
 let auth, db;
+let secondaryApp = null; // 管理者ログインを維持したまま新規アカウントを作るための副インスタンス
 try {
   firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
@@ -7,6 +8,12 @@ try {
   db.enablePersistence().catch(() => {}); // オフライン対応
 } catch (e) {
   console.error('Firebase init error:', e);
+}
+
+function getSecondaryApp() {
+  if (secondaryApp) return secondaryApp;
+  secondaryApp = firebase.initializeApp(firebaseConfig, 'secondary');
+  return secondaryApp;
 }
 
 // ===== BOOKS定数（複数単語帳管理） =====
@@ -76,8 +83,11 @@ let state        = {
   lastStudyDate: null, tutorialDone: false, memos: {},
 };
 let adminStudentsMap = {};
+let adminTeachersMap = {};
 let currentDetailUid = null;
+let currentDetailType = 'student'; // 'student' | 'teacher'
 let adminBookId = 'ex'; // 管理画面で現在表示中の単語帳ID
+let adminTeacherBookId = 'ex'; // 教師一覧で現在表示中の単語帳ID
 
 let quiz = {
   section: null, pool: [], allWords: [], mode: 'normal', orderMode: 'random',
@@ -1351,6 +1361,7 @@ function renderAdminTable(students) {
           <th class="col-total">合計</th>
           <th class="col-wrong">バツ数</th>
           <th class="col-update">最終更新</th>
+          <th class="col-action">操作</th>
         </tr>
       </thead>
       <tbody>
@@ -1364,7 +1375,7 @@ function renderAdminTable(students) {
     const updatedAt    = student.updatedAt?.toDate ? student.updatedAt.toDate().toLocaleDateString('ja-JP') : '—';
 
     html += `<tr>
-      <td class="col-name col-name-link" onclick="openStudentDetail('${student.uid}')"><strong>${student.name || '—'}</strong></td>
+      <td class="col-name col-name-link" onclick="openUserDetail('${student.uid}','student')"><strong>${student.name || '—'}</strong></td>
       <td class="col-id">${student.userId || '—'}</td>
     `;
 
@@ -1386,6 +1397,9 @@ function renderAdminTable(students) {
       </td>
       <td class="col-wrong ${totalWrong > 0 ? 'cell-low' : ''}">${totalWrong > 0 ? `⭐${totalWrong}` : '—'}</td>
       <td class="col-update">${updatedAt}</td>
+      <td class="col-action">
+        <button class="btn btn-promote btn-xsmall" onclick="promoteToTeacher('${student.uid}')">🏫 教師に昇格</button>
+      </td>
     </tr>`;
   });
 
@@ -1396,27 +1410,38 @@ function renderAdminTable(students) {
 // ===== Student Detail Modal =====
 let adminCalViewDate = new Date();
 
-function openStudentDetail(uid) {
-  const student = adminStudentsMap[uid];
-  if (!student) return;
+function getDetailUser() {
+  const map = currentDetailType === 'teacher' ? adminTeachersMap : adminStudentsMap;
+  return map[currentDetailUid] || null;
+}
+
+function openUserDetail(uid, userType) {
+  currentDetailType = (userType === 'teacher') ? 'teacher' : 'student';
+  const map = currentDetailType === 'teacher' ? adminTeachersMap : adminStudentsMap;
+  const user = map[uid];
+  if (!user) return;
   currentDetailUid = uid;
   adminCalViewDate  = new Date();
 
-  document.getElementById('detail-student-name').textContent = student.name || '—';
+  const rolePrefix = currentDetailType === 'teacher' ? '🏫 ' : '';
+  document.getElementById('detail-student-name').textContent = rolePrefix + (user.name || '—');
 
-  document.getElementById('detail-student-id').textContent = student.userId || '—';
+  document.getElementById('detail-student-id').textContent = user.userId || '—';
   const pwEl = document.getElementById('detail-student-pw');
   pwEl.textContent = '●●●●●●';
-  pwEl.dataset.pw = student.password || '（未登録）';
+  pwEl.dataset.pw = user.password || '（未登録）';
   pwEl.dataset.visible = 'false';
   document.getElementById('btn-pw-toggle').textContent = '表示';
 
   document.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('detail-tab-calendar').classList.add('active');
 
-  renderCalendarView(student.dailyLog || {}, document.getElementById('detail-body'));
+  renderCalendarView(user.dailyLog || {}, document.getElementById('detail-body'));
   document.getElementById('student-detail-modal').classList.remove('hidden');
 }
+
+// 後方互換
+function openStudentDetail(uid) { openUserDetail(uid, 'student'); }
 
 function toggleDetailPw() {
   const pwEl  = document.getElementById('detail-student-pw');
@@ -1434,8 +1459,8 @@ function toggleDetailPw() {
 
 function calNavMonth(delta) {
   adminCalViewDate.setMonth(adminCalViewDate.getMonth() + delta);
-  const student = adminStudentsMap[currentDetailUid];
-  if (student) renderCalendarView(student.dailyLog || {}, document.getElementById('detail-body'));
+  const user = getDetailUser();
+  if (user) renderCalendarView(user.dailyLog || {}, document.getElementById('detail-body'));
 }
 
 function renderCalendarView(dailyLog, container) {
@@ -1555,14 +1580,253 @@ function setupAdminSearch(students) {
 
 document.getElementById('btn-admin-refresh').addEventListener('click', loadAdminData);
 
+// ===== Admin Teachers =====
+async function loadAdminTeachersData() {
+  const wrap = document.getElementById('admin-teachers-table-wrap');
+  wrap.innerHTML = '<p class="loading-text">データを読み込み中...</p>';
+  document.getElementById('admin-teachers-stats-bar').innerHTML = '';
+
+  try {
+    const snapshot = await db.collection('users').where('role', '==', 'teacher').get();
+    const teachers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+    teachers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'));
+
+    adminTeachersMap = {};
+    teachers.forEach(t => { adminTeachersMap[t.uid] = t; });
+
+    const today = new Date().toLocaleDateString('ja-JP');
+    document.getElementById('admin-teachers-stats-bar').innerHTML = `
+      <div class="stat-item"><div class="stat-num">${teachers.length}</div><div class="stat-label">登録教師数</div></div>
+      <div class="stat-item"><div class="stat-num">${teachers.filter(t => t.updatedAt?.toDate && t.updatedAt.toDate().toLocaleDateString('ja-JP') === today).length}</div><div class="stat-label">本日学習</div></div>
+    `;
+
+    renderAdminTeacherBookTabs();
+    renderAdminTeachersTable(teachers);
+    setupAdminTeachersSearch(teachers);
+  } catch (e) {
+    wrap.innerHTML = `<p style="color:red;padding:16px">読み込みエラー: ${e.message}<br>Firestoreのルール設定を確認してください。</p>`;
+  }
+}
+
+function renderAdminTeacherBookTabs() {
+  const existing = document.getElementById('admin-teacher-book-tab-bar');
+  if (existing) existing.remove();
+
+  const toolbar = document.querySelector('#admin-panel-teachers .admin-toolbar');
+  if (!toolbar) return;
+
+  const tabBar = document.createElement('div');
+  tabBar.id = 'admin-teacher-book-tab-bar';
+  tabBar.className = 'admin-book-tab-bar';
+  BOOKS.forEach(book => {
+    const btn = document.createElement('button');
+    btn.className = 'admin-book-tab-btn' + (book.id === adminTeacherBookId ? ' active' : '');
+    btn.textContent = `${book.icon} ${book.name}`;
+    btn.addEventListener('click', () => {
+      adminTeacherBookId = book.id;
+      document.querySelectorAll('#admin-teacher-book-tab-bar .admin-book-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderAdminTeachersTable(Object.values(adminTeachersMap));
+    });
+    tabBar.appendChild(btn);
+  });
+  toolbar.parentNode.insertBefore(tabBar, toolbar);
+}
+
+function renderAdminTeachersTable(teachers) {
+  const wrap = document.getElementById('admin-teachers-table-wrap');
+  if (teachers.length === 0) {
+    wrap.innerHTML = '<p class="loading-text">登録教師がいません。</p>';
+    return;
+  }
+
+  const book = BOOKS.find(b => b.id === adminTeacherBookId) || BOOKS[0];
+  const totalWords = book.words().filter(w => w.japanese).length;
+
+  let html = `
+    <div class="admin-table-scroll">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th class="col-name">氏名</th>
+          <th class="col-id">ID</th>
+          <th class="col-pw">パスワード</th>
+          ${book.sections.map(s => `<th class="col-sec">${s.label.replace('テスト ', 'T')}</th>`).join('')}
+          <th class="col-total">合計</th>
+          <th class="col-wrong">バツ数</th>
+          <th class="col-update">最終更新</th>
+          <th class="col-action">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  teachers.forEach(teacher => {
+    const records = getStudentBookRecords(teacher, adminTeacherBookId);
+    const totalCorrect = book.words().filter(w => w.japanese && records[w.no]?.correct).length;
+    const totalWrong   = book.words().filter(w => w.japanese && (records[w.no]?.wrongCount || 0) > 0).length;
+    const totalPct     = totalWords > 0 ? Math.round((totalCorrect / totalWords) * 100) : 0;
+    const updatedAt    = teacher.updatedAt?.toDate ? teacher.updatedAt.toDate().toLocaleDateString('ja-JP') : '—';
+    const pwRaw        = teacher.password || '（未登録）';
+    const pwEscaped    = String(pwRaw).replace(/"/g, '&quot;');
+
+    html += `<tr>
+      <td class="col-name col-name-link" onclick="openUserDetail('${teacher.uid}','teacher')"><strong>${teacher.name || '—'}</strong></td>
+      <td class="col-id">${teacher.userId || '—'}</td>
+      <td class="col-pw">
+        <span class="pw-mask" data-pw="${pwEscaped}" data-visible="false">●●●●●●</span>
+        <button class="btn-pw-toggle btn-pw-toggle-inline" onclick="toggleInlinePw(this)">表示</button>
+      </td>
+    `;
+
+    book.sections.forEach(sec => {
+      const { correct, total } = calcSectionProgress(records, sec.id, book);
+      const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+      const cls = correct === total && total > 0 ? 'cell-perfect'
+                : pct >= 80 ? 'cell-good'
+                : pct >= 50 ? 'cell-mid'
+                : pct > 0   ? 'cell-low'
+                : 'cell-none';
+      html += `<td class="col-sec ${cls}">${correct}<br><small>/${total}</small></td>`;
+    });
+
+    html += `
+      <td class="col-total">
+        <div class="total-pct">${totalPct}%</div>
+        <small>${totalCorrect}/${totalWords}</small>
+      </td>
+      <td class="col-wrong ${totalWrong > 0 ? 'cell-low' : ''}">${totalWrong > 0 ? `⭐${totalWrong}` : '—'}</td>
+      <td class="col-update">${updatedAt}</td>
+      <td class="col-action">
+        <button class="btn btn-demote btn-xsmall" onclick="demoteToStudent('${teacher.uid}')">👤 生徒に戻す</button>
+      </td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+function toggleInlinePw(btnEl) {
+  const span = btnEl.parentElement.querySelector('.pw-mask');
+  if (!span) return;
+  if (span.dataset.visible === 'true') {
+    span.textContent = '●●●●●●';
+    span.dataset.visible = 'false';
+    btnEl.textContent = '表示';
+  } else {
+    span.textContent = span.dataset.pw || '（未登録）';
+    span.dataset.visible = 'true';
+    btnEl.textContent = '隠す';
+  }
+}
+
+function setupAdminTeachersSearch(teachers) {
+  const searchEl = document.getElementById('admin-teacher-search');
+  const newSearchEl = searchEl.cloneNode(true);
+  searchEl.parentNode.replaceChild(newSearchEl, searchEl);
+  newSearchEl.addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const filtered = q ? teachers.filter(t => (t.name || '').toLowerCase().includes(q) || (t.userId || '').toLowerCase().includes(q)) : teachers;
+    renderAdminTeachersTable(filtered);
+  });
+}
+
+document.getElementById('btn-admin-teachers-refresh').addEventListener('click', loadAdminTeachersData);
+
+// 生徒 → 教師 昇格
+async function promoteToTeacher(uid) {
+  const student = adminStudentsMap[uid];
+  if (!student) return;
+  if (!confirm(`「${student.name}」さんを教師に昇格しますか？\n（管理画面へのアクセス権限が付与されます）`)) return;
+  try {
+    await db.collection('users').doc(uid).set({ role: 'teacher' }, { merge: true });
+    alert('教師に昇格しました。');
+    loadAdminData();
+    if (!document.getElementById('admin-panel-teachers').classList.contains('hidden')) {
+      loadAdminTeachersData();
+    }
+  } catch (e) {
+    alert(`エラー: ${e.message}`);
+  }
+}
+
+// 教師 → 生徒 降格
+async function demoteToStudent(uid) {
+  const teacher = adminTeachersMap[uid];
+  if (!teacher) return;
+  if (teacher.uid === currentUser?.uid) {
+    alert('自分自身を降格させることはできません。');
+    return;
+  }
+  if (!confirm(`「${teacher.name}」さんを生徒に戻しますか？\n（管理画面へのアクセス権限が失われます）`)) return;
+  try {
+    await db.collection('users').doc(uid).set({ role: 'student' }, { merge: true });
+    alert('生徒に戻しました。');
+    loadAdminTeachersData();
+    if (!document.getElementById('admin-panel-students').classList.contains('hidden')) {
+      loadAdminData();
+    }
+  } catch (e) {
+    alert(`エラー: ${e.message}`);
+  }
+}
+
+// 新規教師アカウント作成（管理者ログイン維持）
+document.getElementById('btn-create-teacher').addEventListener('click', async () => {
+  const nameEl = document.getElementById('create-teacher-name');
+  const idEl   = document.getElementById('create-teacher-id');
+  const pwEl   = document.getElementById('create-teacher-password');
+  const errEl  = document.getElementById('create-teacher-error');
+  const btnEl  = document.getElementById('btn-create-teacher');
+
+  const name     = nameEl.value.trim();
+  const tid      = idEl.value.trim();
+  const password = pwEl.value;
+
+  errEl.classList.add('hidden');
+  if (!name)               { showAuthError(errEl, 'お名前を入力してください。'); return; }
+  if (!tid)                { showAuthError(errEl, 'IDを入力してください。'); return; }
+  if (password.length < 6) { showAuthError(errEl, 'パスワードは6文字以上で入力してください。'); return; }
+
+  try {
+    btnEl.disabled = true;
+    btnEl.textContent = '作成中...';
+
+    const secApp  = getSecondaryApp();
+    const secAuth = secApp.auth();
+    const cred = await secAuth.createUserWithEmailAndPassword(idToEmail(tid), password);
+    await db.collection('users').doc(cred.user.uid).set({
+      name, userId: tid, password, role: 'teacher',
+      records_ex: {}, records_pastan: {},
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await secAuth.signOut();
+
+    nameEl.value = '';
+    idEl.value   = '';
+    pwEl.value   = '';
+    document.getElementById('admin-create-teacher-details').open = false;
+    alert(`教師「${name}」を作成しました。`);
+    loadAdminTeachersData();
+  } catch (e) {
+    showAuthError(errEl, authErrorMsg(e.code) || e.message);
+  } finally {
+    btnEl.disabled = false;
+    btnEl.textContent = '作成する';
+  }
+});
+
 // ===== Admin Tab =====
 function switchAdminTab(tab) {
-  const isStudents = tab === 'students';
-  document.getElementById('admin-panel-students').classList.toggle('hidden', !isStudents);
-  document.getElementById('admin-panel-words').classList.toggle('hidden', isStudents);
-  document.getElementById('admin-tab-students').classList.toggle('active', isStudents);
-  document.getElementById('admin-tab-words').classList.toggle('active', !isStudents);
-  if (!isStudents) {
+  const tabs = ['students', 'teachers', 'words'];
+  tabs.forEach(t => {
+    document.getElementById(`admin-panel-${t}`).classList.toggle('hidden', t !== tab);
+    document.getElementById(`admin-tab-${t}`).classList.toggle('active', t === tab);
+  });
+  if (tab === 'teachers') {
+    loadAdminTeachersData();
+  } else if (tab === 'words') {
     renderAdminWordBookTabs();
     updateAdminWordSectionFilter();
     renderAdminWordList();
@@ -1659,16 +1923,16 @@ document.getElementById('btn-close-detail').addEventListener('click', () => {
 document.querySelectorAll('.detail-tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     if (!currentDetailUid) return;
-    const student = adminStudentsMap[currentDetailUid];
-    if (!student) return;
+    const user = getDetailUser();
+    if (!user) return;
     document.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const body = document.getElementById('detail-body');
     body.innerHTML = '';
     if (btn.dataset.tab === 'calendar') {
-      renderCalendarView(student.dailyLog || {}, body);
+      renderCalendarView(user.dailyLog || {}, body);
     } else {
-      renderLineChart(student.dailyLog || {}, body);
+      renderLineChart(user.dailyLog || {}, body);
     }
   });
 });
