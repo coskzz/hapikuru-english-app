@@ -69,6 +69,35 @@ const BOOKS = [
     ],
     firestoreKey: 'records_pastan',
   },
+  {
+    id: 'pastan2',
+    name: '2級パス単',
+    label: '英検2級 でる順パス単',
+    icon: '📙',
+    words: () => (typeof WORDS_PASTAN2 !== 'undefined' ? WORDS_PASTAN2 : []),
+    extras: () => (typeof WORD_EXTRAS_PASTAN2 !== 'undefined' ? WORD_EXTRAS_PASTAN2 : {}),
+    phonetics: () => (typeof PHONETICS_PASTAN2 !== 'undefined' ? PHONETICS_PASTAN2 : {}),
+    sections: [
+      { id: '0001-0100', label: '2級パス単 1',           range: 'No.0001〜0100' },
+      { id: '0101-0200', label: '2級パス単 2',           range: 'No.0101〜0200' },
+      { id: '0201-0300', label: '2級パス単 3',           range: 'No.0201〜0300' },
+      { id: '0301-0400', label: '2級パス単 4',           range: 'No.0301〜0400' },
+      { id: '0401-0500', label: '2級パス単 5',           range: 'No.0401〜0500' },
+      { id: '0501-0600', label: '2級パス単 6',           range: 'No.0501〜0600' },
+      { id: '0601-0700', label: '2級パス単 7',           range: 'No.0601〜0700' },
+      { id: '0701-0800', label: '2級パス単 8',           range: 'No.0701〜0800' },
+      { id: '0801-0900', label: '2級パス単 9',           range: 'No.0801〜0900' },
+      { id: '0901-1000', label: '2級パス単 10',          range: 'No.0901〜1000' },
+      { id: '1001-1100', label: '2級パス単 11',          range: 'No.1001〜1100' },
+      { id: '1101-1200', label: '2級パス単 12',          range: 'No.1101〜1200' },
+      { id: '1201-1300', label: '2級パス単 13',          range: 'No.1201〜1300' },
+      { id: '1301-1400', label: '2級パス単 14（熟語）',  range: 'No.1301〜1400' },
+      { id: '1401-1500', label: '2級パス単 15（熟語）',  range: 'No.1401〜1500' },
+      { id: '1501-1600', label: '2級パス単 16（熟語）',  range: 'No.1501〜1600' },
+      { id: '1601-1700', label: '2級パス単 17（熟語）',  range: 'No.1601〜1700' },
+    ],
+    firestoreKey: 'records_pastan2',
+  },
 ];
 
 // ===== App State =====
@@ -77,8 +106,13 @@ let userRole     = 'student';
 let userName     = '';
 let userId       = '';
 let currentBook  = null; // 現在選択中の単語帳
+function emptyBookRecords() {
+  const obj = {};
+  BOOKS.forEach(b => { obj[b.id] = {}; });
+  return obj;
+}
 let state        = {
-  bookRecords: { ex: {}, pastan: {} }, // 単語帳ごとの進捗
+  bookRecords: emptyBookRecords(), // 単語帳ごとの進捗（BOOKSに合わせて動的）
   dailyLog: {}, streak: 0, bestStreak: 0, points: 0,
   lastStudyDate: null, tutorialDone: false, memos: {},
 };
@@ -212,17 +246,20 @@ async function loadUserData(uid) {
     userName  = d.name   || '';
     userId    = d.userId || '';
 
-    // マイグレーション: 旧 records → records_ex
-    if (d.records && !d.records_ex) {
-      state.bookRecords.ex = d.records;
-      await db.collection('users').doc(uid).set(
-        { records_ex: d.records },
-        { merge: true }
-      ).catch(console.error);
-    } else {
-      state.bookRecords.ex = d.records_ex || {};
-    }
-    state.bookRecords.pastan = d.records_pastan || {};
+    // BOOKSベースで動的読込（exはマイグレーション込み）
+    BOOKS.forEach(book => {
+      const key = book.firestoreKey;
+      if (book.id === 'ex' && d.records && !d.records_ex) {
+        // マイグレーション: 旧 records → records_ex
+        state.bookRecords.ex = d.records;
+        db.collection('users').doc(uid).set(
+          { records_ex: d.records },
+          { merge: true }
+        ).catch(console.error);
+      } else {
+        state.bookRecords[book.id] = d[key] || {};
+      }
+    });
 
     state.dailyLog      = d.dailyLog      || {};
     state.streak        = d.streak        || 0;
@@ -233,7 +270,7 @@ async function loadUserData(uid) {
     state.memos         = d.memos         || {};
   } else {
     userRole = 'student';
-    state.bookRecords   = { ex: {}, pastan: {} };
+    state.bookRecords   = emptyBookRecords();
     state.dailyLog      = {};
     state.streak        = 0;
     state.bestStreak    = 0;
@@ -252,21 +289,20 @@ function saveState() {
     return sum + book.words().filter(w => w.japanese && state.bookRecords[book.id]?.[w.no]?.correct).length;
   }, 0);
   state.dailyLog[today] = { mastered: totalMastered };
-  db.collection('users').doc(currentUser.uid).set(
-    {
-      records_ex:      state.bookRecords.ex,
-      records_pastan:  state.bookRecords.pastan,
-      dailyLog:        state.dailyLog,
-      streak:          state.streak,
-      bestStreak:      state.bestStreak,
-      points:          state.points,
-      lastStudyDate:   state.lastStudyDate,
-      tutorialDone:    state.tutorialDone,
-      memos:           state.memos,
-      updatedAt:       firebase.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  ).catch(console.error);
+  const payload = {
+    dailyLog:        state.dailyLog,
+    streak:          state.streak,
+    bestStreak:      state.bestStreak,
+    points:          state.points,
+    lastStudyDate:   state.lastStudyDate,
+    tutorialDone:    state.tutorialDone,
+    memos:           state.memos,
+    updatedAt:       firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  BOOKS.forEach(book => {
+    payload[book.firestoreKey] = state.bookRecords[book.id] || {};
+  });
+  db.collection('users').doc(currentUser.uid).set(payload, { merge: true }).catch(console.error);
 }
 
 // saveState の別名（フラッシュカード完了時などに使用）
@@ -275,7 +311,7 @@ const saveRecords = saveState;
 function resetState() {
   if (!confirm('全学習データをリセットしますか？\nこの操作は元に戻せません。')) return;
   state = {
-    bookRecords: { ex: {}, pastan: {} },
+    bookRecords: emptyBookRecords(),
     dailyLog: {}, streak: 0, bestStreak: 0, points: 0,
     lastStudyDate: null, tutorialDone: state.tutorialDone, memos: {},
   };
