@@ -40,7 +40,7 @@ const BOOKS = [
   },
   {
     id: 'pastan',
-    name: 'パス単',
+    name: '準1級パス単',
     label: '英検準1級 パス単',
     icon: '📗',
     words: () => (typeof WORDS_PASTAN !== 'undefined' ? WORDS_PASTAN : []),
