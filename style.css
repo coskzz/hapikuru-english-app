@@ -1144,8 +1144,11 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
   display: flex;
   gap: 8px;
   padding: 12px 16px 0;
+  overflow-x: auto; /* 単語帳が増えてもボタンを潰さず横スクロールで並べる */
 }
 .admin-book-tab-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 6px 14px;
   border: 2px solid #ddd;
   border-radius: 20px;

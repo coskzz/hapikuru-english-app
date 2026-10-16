@@ -40,8 +40,8 @@ const BOOKS = [
   },
   {
     id: 'pastan',
-    name: '準1級パス単',
-    label: '英検準1級 パス単',
+    name: '準1級パス単（5訂版）',
+    label: '英検準1級 でる順パス単（5訂版）',
     icon: '📗',
     words: () => (typeof WORDS_PASTAN !== 'undefined' ? WORDS_PASTAN : []),
     extras: () => (typeof WORD_EXTRAS_PASTAN !== 'undefined' ? WORD_EXTRAS_PASTAN : {}),
@@ -68,6 +68,37 @@ const BOOKS = [
       { id: '1801-1900', label: 'パス単 19（句動詞）', range: 'No.1801〜1900' },
     ],
     firestoreKey: 'records_pastan',
+  },
+  {
+    id: 'pastan6',
+    name: '準1級パス単（6訂版）',
+    label: '英検準1級 でる順パス単（6訂版）',
+    icon: '📕',
+    words: () => (typeof WORDS_PASTAN6 !== 'undefined' ? WORDS_PASTAN6 : []),
+    extras: () => (typeof WORD_EXTRAS_PASTAN6 !== 'undefined' ? WORD_EXTRAS_PASTAN6 : {}),
+    phonetics: () => (typeof PHONETICS_PASTAN6 !== 'undefined' ? PHONETICS_PASTAN6 : {}),
+    sections: [
+      { id: '0001-0100', label: 'パス単 1',           range: 'No.0001〜0100' },
+      { id: '0101-0200', label: 'パス単 2',           range: 'No.0101〜0200' },
+      { id: '0201-0300', label: 'パス単 3',           range: 'No.0201〜0300' },
+      { id: '0301-0400', label: 'パス単 4',           range: 'No.0301〜0400' },
+      { id: '0401-0500', label: 'パス単 5',           range: 'No.0401〜0500' },
+      { id: '0501-0600', label: 'パス単 6',           range: 'No.0501〜0600' },
+      { id: '0601-0700', label: 'パス単 7',           range: 'No.0601〜0700' },
+      { id: '0701-0800', label: 'パス単 8',           range: 'No.0701〜0800' },
+      { id: '0801-0900', label: 'パス単 9',           range: 'No.0801〜0900' },
+      { id: '0901-1000', label: 'パス単 10',          range: 'No.0901〜1000' },
+      { id: '1001-1100', label: 'パス単 11',          range: 'No.1001〜1100' },
+      { id: '1101-1200', label: 'パス単 12',          range: 'No.1101〜1200' },
+      { id: '1201-1300', label: 'パス単 13',          range: 'No.1201〜1300' },
+      { id: '1301-1400', label: 'パス単 14',          range: 'No.1301〜1400' },
+      { id: '1401-1500', label: 'パス単 15',          range: 'No.1401〜1500' },
+      { id: '1501-1600', label: 'パス単 16',          range: 'No.1501〜1600' },
+      { id: '1601-1700', label: 'パス単 17（熟語）',  range: 'No.1601〜1700' },
+      { id: '1701-1800', label: 'パス単 18（熟語）',  range: 'No.1701〜1800' },
+      { id: '1801-1900', label: 'パス単 19（熟語）',  range: 'No.1801〜1900' },
+    ],
+    firestoreKey: 'records_pastan6',
   },
   {
     id: 'pastan2',
@@ -567,7 +598,10 @@ function openMode(sec) {
 
   const resumeBtn = document.getElementById('btn-start-resume');
   const saved = getSavedQuiz();
-  if (saved && saved.sectionId === sec.id) {
+  // 単語帳ごとにセクションIDが重なるため、単語帳も一致したときだけ再開を出す
+  // （bookId のない旧データは、bookId 導入前からある単語帳でだけ再開を出す）
+  const savedBookId = saved && (saved.bookId || (currentBook.id !== 'pastan6' ? currentBook.id : null));
+  if (saved && saved.sectionId === sec.id && savedBookId === currentBook.id) {
     resumeBtn.classList.remove('hidden');
     resumeBtn.textContent = `⏸ 続きから再開（残り ${saved.poolNos.length} 問）`;
   } else {
@@ -829,6 +863,7 @@ function saveQuizAndGoBack() {
   const remainingPool = quiz.current ? [quiz.current, ...quiz.pool] : quiz.pool;
   if (remainingPool.length > 0) {
     localStorage.setItem('quiz_resume', JSON.stringify({
+      bookId:       currentBook.id,
       sectionId:    quiz.section.id,
       sectionLabel: quiz.section.label,
       sectionRange: quiz.section.range,
