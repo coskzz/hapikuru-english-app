@@ -305,6 +305,7 @@
     <button class="admin-tab-btn active" id="admin-tab-students" onclick="switchAdminTab('students')">👥 生徒一覧</button>
     <button class="admin-tab-btn" id="admin-tab-teachers" onclick="switchAdminTab('teachers')">🏫 教師一覧</button>
     <button class="admin-tab-btn" id="admin-tab-words" onclick="switchAdminTab('words')">📚 単語一覧</button>
+    <button class="admin-tab-btn" id="admin-tab-manual" onclick="switchAdminTab('manual')">❓ 使い方</button>
   </div>
 
   <!-- 生徒一覧パネル -->
@@ -313,6 +314,15 @@
     <div class="admin-toolbar">
       <input type="text" id="admin-search" class="admin-search" placeholder="生徒名・IDで検索...">
       <button class="btn btn-secondary btn-small" id="btn-admin-refresh">🔄 更新</button>
+    </div>
+    <div class="admin-filter-bar">
+      <div class="filter-chips" id="admin-archive-chips">
+        <button class="chip active" data-archive="active">在籍中</button>
+        <button class="chip" data-archive="archived">📦 アーカイブ</button>
+        <button class="chip" data-archive="all">全員</button>
+      </div>
+      <label class="filter-toggle"><input type="checkbox" id="admin-show-inactive"> やっていない生徒も表示</label>
+      <span class="admin-hidden-note" id="admin-hidden-note"></span>
     </div>
     <div id="admin-table-wrap">
       <p class="loading-text">データを読み込み中...</p>
@@ -356,6 +366,20 @@
     </div>
     <div id="admin-word-count" class="admin-word-count"></div>
     <div id="admin-word-list-wrap"></div>
+  </div>
+
+  <!-- 使い方パネル -->
+  <div id="admin-panel-manual" class="hidden"></div>
+</div>
+
+<!-- 使い方モーダル（生徒用） -->
+<div id="manual-modal" class="modal-overlay hidden">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-header">
+      <h3 class="modal-title">❓ 使い方</h3>
+      <button class="modal-close-btn" id="btn-close-manual">✕</button>
+    </div>
+    <div id="manual-modal-body" class="manual-modal-body"></div>
   </div>
 </div>
 
@@ -422,6 +446,7 @@
     <div class="detail-tabs">
       <button class="detail-tab-btn active" id="detail-tab-calendar" data-tab="calendar">📅 カレンダー</button>
       <button class="detail-tab-btn" id="detail-tab-chart" data-tab="chart">📈 グラフ</button>
+      <button class="detail-tab-btn" id="detail-tab-progress" data-tab="progress">📚 単語帳ごと</button>
     </div>
     <div id="detail-body" class="detail-body"></div>
   </div>
@@ -458,13 +483,33 @@
     </div>
   </div>
 
+  <!-- 単語帳の切り替え -->
+  <div class="mypage-book-tabs" id="stats-book-tabs"></div>
+
+  <!-- 今日 -->
+  <div class="mypage-section-title">📅 今日</div>
+  <div class="effort-grid effort-grid-3" id="stats-today"></div>
+
   <!-- 学習の記録 -->
   <div class="mypage-section-title">📚 学習の記録</div>
   <div class="effort-grid" id="stats-effort-grid"></div>
 
+  <!-- 範囲ごと -->
+  <div class="mypage-section-title">🏆 範囲ごとの点数</div>
+  <div id="stats-section-table"></div>
+
+  <!-- カレンダー -->
+  <div class="mypage-section-title">📆 カレンダー</div>
+  <div id="stats-calendar"></div>
+
   <!-- グラフ -->
   <div class="mypage-section-title">📈 習得語数の推移</div>
   <div id="stats-chart"></div>
+
+  <div class="mypage-feedback-area">
+    <p class="feedback-desc">数字の意味は「使い方」で確認できます。</p>
+    <button class="btn btn-secondary btn-small" id="btn-manual-open">❓ 使い方を見る</button>
+  </div>
 </div>
 
 <!-- キャラクターウィジェット（クイズ画面以外に表示） -->
