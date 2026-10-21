@@ -1433,4 +1433,8 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
 .h-status { margin-top: 2px; font-size: .72rem; color: #888; }
 .col-sec .cell-badges { white-space: normal; min-width: 64px; }
 .col-sec .pass-detail, .col-sec .seqfull-badge { display: block; margin: 0; }
+/* 「前の数え方」：カーソル・タップで説明 */
+.legacy-tag { cursor: help; text-decoration: underline dotted; text-underline-offset: 2px; white-space: nowrap; }
+.legacy-tag:hover { color: #FF6B9D; }
+.help-mark-sm { width: 12px; height: 12px; font-size: .55rem; margin-left: 2px; }
 

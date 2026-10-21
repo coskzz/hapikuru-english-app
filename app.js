@@ -287,10 +287,12 @@ function passBadge(info, detail = true) {
   }
   return html;
 }
+// 「前の数え方」の印。カーソルを乗せる・タップすると説明が出る（data-help）
+const LEGACY_TAG = '<span class="legacy-tag" data-help="legacy">前の数え方<span class="help-mark help-mark-sm">?</span></span>';
 // 「280/300」と、その下に小さく「最高290」または「前の数え方」
 function scoreHtml(info) {
   let sub = '';
-  if (info.legacy && info.answered > 0) sub = '<small class="score-sub">前の数え方</small>';
+  if (info.legacy && info.answered > 0) sub = `<small class="score-sub">${LEGACY_TAG}</small>`;
   else if (info.best != null && info.best > info.score) sub = `<small class="score-sub">最高${info.best}</small>`;
   return `${info.score}<small>/${info.total}</small>${sub ? '<br>' + sub : ''}`;
 }
@@ -801,7 +803,7 @@ function renderHome() {
       <div class="card-range">${sec.range}</div>
       <div class="card-progress"><span class="card-score ${sectionCellClass(info)}">${info.score}/${info.total} 点</span></div>
       ${info.best != null && info.best > info.score ? `<div class="card-progress card-best">最高 ${info.best}点</div>` : ''}
-      ${info.legacy && info.answered > 0 ? `<div class="card-progress card-best">前の数え方</div>` : ''}
+      ${info.legacy && info.answered > 0 ? `<div class="card-progress card-best">${LEGACY_TAG}</div>` : ''}
       ${info.passCount > 0 || info.round >= 2 || info.seqFull > 0 ? `<div class="card-progress card-badges">${passBadge(info, false)} ${roundBadge(info)}</div>` : ''}
       ${remainWrong > 0 ? `<div class="card-progress" style="color:#E05555">残りのバツ ${remainWrong} 個</div>` : ''}
       ${remainWrong > 0 ? `<div class="card-badge">✗</div>` : ''}
@@ -826,7 +828,7 @@ function openMode(sec) {
   document.getElementById('mode-stats').innerHTML = `
     <strong>本番の点数:</strong> <span class="${sectionCellClass(info)} mode-score">${info.score}/${total}</span>
     ${info.best != null && info.best > info.score ? `<span class="mode-best">最高 ${info.best}</span>` : ''}
-    ${info.legacy && info.answered > 0 ? '<span class="mode-best">前の数え方</span>' : ''}
+    ${info.legacy && info.answered > 0 ? `<span class="mode-best">${LEGACY_TAG}</span>` : ''}
     ${passBadge(info)} ${roundBadge(info)}<br>
     <strong>残りのバツ:</strong> ${wrongWords.length} 個（これまで ${info.everWrong} 個）／
     <strong>残りのマグレ:</strong> ${luckyWords.length} 個<br>
@@ -2997,6 +2999,7 @@ const HELP = {
   fc:          { title: 'フラッシュカード', text: 'フラッシュカードをやった回数、めくった枚数、最後にやった日です。フラッシュカードは練習なので、本番の点数には入りません。', anchor: 'm-fc' },
   fcKnown:     { title: '🃏 わかった語数', text: 'フラッシュカードで最後に「わかる」を押した単語の数です。「わからない」を押すと外れます。', anchor: 'm-fc' },
   updated:     { title: '最終更新', text: 'その生徒の記録が最後に保存された日です。', anchor: 'm-columns' },
+  legacy:      { title: '「前の数え方」とは', text: 'このセクションは、まだ新しい決まり（本番テストを毎回全問、最初から最後まで通しで解く）で本番を解き終えていません。出ている点数は、2026年10月22日より前の数え方の点数です。前の数え方では、1回目に間違えた単語だけを解き直して、全部の単語が一度は正解になった数を点数にしていました。次に本番テストを最後まで解くと、その回の点数に置き換わり、この印は消えます。', anchor: 'm-pass' },
   history:     { title: '履歴', text: 'テストやフラッシュカードを1回やるごとの記録です。日時、単語帳とセクション、本番か練習か、何周目か、🔀ランダムか📋順番通りか、点数、最後まで解いたか・途中でやめたかが出ます。新しい順に最大300回ぶん。2026年10月22日から記録しています。', anchor: 'm-history' },
   calendar:    { title: 'カレンダー', text: '色の付いた日は勉強した日です。数字は、その日にテストで答えた数。🃏の数字は、その日にフラッシュカードで「わかる」を押した数です。改修より前の日は、その日の習得語数が出ます。', anchor: 'm-graph' },
   chart:       { title: 'グラフ', text: 'ピンクの線は、全単語帳の習得語数（直近の本番テストで正解した語数）です。薄紫の線は、それまでに到達した最高の習得語数で、減りません。2本の差が、一度覚えたあとに忘れた分です。点線は残りのバツの数で、2026年10月21日から記録しています。', anchor: 'm-graph' },
@@ -3013,6 +3016,46 @@ document.addEventListener('click', (e) => {
   if (helpJustOpened) { helpJustOpened = false; return; }
   if (!helpPopEl.contains(e.target)) closeHelp();
 });
+// data-help の付いた文字：タップすると説明を出す。カードなどの親のタップ（画面の移動）は起こさない
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-help]');
+  if (!el) return;
+  e.stopPropagation();
+  e.preventDefault();
+  showHelp(el.dataset.help, el);
+  helpPopEl.dataset.pinned = '1';
+  helpJustOpened = false; // このクリックは外側を閉じる処理まで届かないので、印を戻しておく
+}, true);
+// カーソルを乗せたときにも出す（マウスが使える画面だけ）。離れたら閉じる。説明の上にカーソルがあるあいだは閉じない
+const canHover = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+let helpHoverTimer = null;
+function scheduleHoverClose() {
+  clearTimeout(helpHoverTimer);
+  helpHoverTimer = setTimeout(() => {
+    if (helpPopEl && helpPopEl.dataset.hover === '1' && helpPopEl.dataset.pinned !== '1' && !helpPopEl.matches(':hover')) closeHelp();
+  }, 250);
+}
+if (canHover) {
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('[data-help]');
+    if (el) {
+      clearTimeout(helpHoverTimer);
+      if (helpPopEl && helpPopEl.dataset.anchorKey === el.dataset.help && helpPopEl._anchor === el) return;
+      if (helpPopEl && helpPopEl.dataset.pinned === '1') return;
+      showHelp(el.dataset.help, el);
+      helpPopEl.dataset.hover = '1';
+      helpPopEl._anchor = el;
+      helpJustOpened = false;
+      helpPopEl.addEventListener('mouseleave', scheduleHoverClose);
+      helpPopEl.addEventListener('mouseenter', () => clearTimeout(helpHoverTimer));
+      return;
+    }
+  });
+  document.addEventListener('mouseout', (e) => {
+    const el = e.target.closest('[data-help]');
+    if (el && !el.contains(e.relatedTarget)) scheduleHoverClose();
+  });
+}
 // key の説明を el の近くに出す。opts.sortKey があれば並べ替えボタンも付ける（管理画面の列）
 function showHelp(key, el, opts = {}) {
   closeHelp();
@@ -3038,6 +3081,7 @@ function showHelp(key, el, opts = {}) {
     </div>`;
   document.body.appendChild(pop);
   helpPopEl = pop;
+  pop.dataset.anchorKey = key;
   // 押した場所の下に出す。画面からはみ出すときは内側に寄せる
   const r = el ? el.getBoundingClientRect() : { left: 16, bottom: 80, width: 0 };
   const w = Math.min(300, window.innerWidth - 24);
