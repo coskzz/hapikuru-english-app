@@ -2736,9 +2736,16 @@ const HELP = {
 };
 
 let helpPopEl = null;
+let helpJustOpened = false; // 開いたときのクリック自身で閉じないようにする印
 function closeHelp() {
   if (helpPopEl) { helpPopEl.remove(); helpPopEl = null; }
 }
+// 説明の外をタップしたら閉じる（1回だけ登録しておく）
+document.addEventListener('click', (e) => {
+  if (!helpPopEl) return;
+  if (helpJustOpened) { helpJustOpened = false; return; }
+  if (!helpPopEl.contains(e.target)) closeHelp();
+});
 // key の説明を el の近くに出す。opts.sortKey があれば並べ替えボタンも付ける（管理画面の列）
 function showHelp(key, el, opts = {}) {
   closeHelp();
@@ -2774,13 +2781,7 @@ function showHelp(key, el, opts = {}) {
   if (top + ph > window.innerHeight - 12) top = Math.max(12, r.top - ph - 6);
   pop.style.left = left + 'px';
   pop.style.top  = top + 'px';
-  setTimeout(() => {
-    document.addEventListener('click', onHelpOutside, { once: true });
-  }, 0);
-}
-function onHelpOutside(e) {
-  if (helpPopEl && !helpPopEl.contains(e.target)) closeHelp();
-  else if (helpPopEl) document.addEventListener('click', onHelpOutside, { once: true });
+  helpJustOpened = true;
 }
 
 // 使い方ページ。先生は管理画面のタブ、生徒はモーダルで開く
