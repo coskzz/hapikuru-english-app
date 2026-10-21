@@ -149,6 +149,8 @@ let state        = {
   dailyLog: {}, streak: 0, bestStreak: 0, points: 0,
   lastStudyDate: null, tutorialDone: false, memos: {},
   archived: false,
+  historyLog: [],   // テストの履歴（新しい順・最大300件）
+  notices: {},      // 1回だけ出すお知らせを見たかどうか
 };
 let adminStudentsMap = {};
 let adminTeachersMap = {};
@@ -181,15 +183,18 @@ function currentRecords() {
 
 // ===== 記録の数え方（2026-10 改修） =====
 // 単語1語の記録 rec[no] の項目：
-//   correct     本番（通常テスト）で今正解になっているか。練習では動かさない
+//   correct     直近の本番（通しのテスト）で正解したか。本番を最後まで解き終えたときにまとめて書き換える。練習では動かさない
 //   attempts    答えた回数（本番・練習とも）
 //   wrongCount  間違えた回数（本番・練習とも）。1以上なら「これまでのバツ」
 //   practiceOk  間違えたあと、練習（バツ復習など）で正解したか。false のままなら「残りのバツ」
 //   lucky       最後の正解が「マグレ」だったか。true なら「残りのマグレ」
 //   luckyCount  マグレと申告した回数。1以上なら「これまでのマグレ」
-//   lastRound   本番で最後に出題された周の番号（2周目以降の出題管理に使う）
 //   fcUnknown   フラッシュカードで最後に押したのが「わからない」なら true、「わかる」なら false
-function todayKey() { return new Date().toISOString().slice(0, 10); }
+// 日付のキー（YYYY-MM-DD）は端末の時刻（日本時間）で作る。UTCだと朝9時より前の勉強が前の日になってしまうため
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function todayKey() { return dateKey(new Date()); }
 function wordRec(rec, no) {
   if (!rec[no]) rec[no] = { correct: false, attempts: 0, wrongCount: 0, lucky: false };
   return rec[no];
@@ -218,10 +223,23 @@ function sectionInfo(book, records, secStats, sectionId) {
     if (isRemainLucky(r))   info.remainLucky++;
     if (isFcKnown(r))       info.fcKnown++;
   });
-  info.cleared = info.total > 0 && info.correct === info.total;
-  // 改修前から全問正解になっているセクションは「🏆1」から数え始める
-  info.passCount = st.passCount != null ? st.passCount : (info.cleared ? 1 : 0);
-  info.round = st.round || 1;
+  // 本番の点数：通しの決まり（2026-10-22〜）で1回でも解き終えていればその回の点数、まだなら前の数え方の点数
+  info.hasRun  = st.lastScore != null;
+  info.legacy  = !info.hasRun;
+  info.score   = info.hasRun ? st.lastScore : info.correct;
+  info.best    = st.bestScore != null ? st.bestScore : null;
+  info.cleared = info.total > 0 && info.score === info.total;
+  // 合格回数。改修前から全問正解になっているセクションは「🏆1」から数え始める
+  const legacyCleared = info.total > 0 && info.correct === info.total;
+  info.passCount = st.passCount != null ? st.passCount : (legacyCleared ? 1 : 0);
+  info.passes      = st.passes || [];
+  info.passRandom  = info.passes.filter(x => x.order === 'random').length;
+  info.passSeq     = info.passes.filter(x => x.order === 'sequential').length;
+  info.passLegacy  = Math.max(0, info.passCount - info.passes.length);
+  info.seqFull     = st.seqFullCount || 0;
+  // 色と「◯周目」は、直近の本番が何周目だったかで決める。次の本番は「合格回数＋1」周目
+  info.round     = info.hasRun ? (st.lastRunRound || 1) : (st.round || 1);
+  info.nextRound = info.passCount + 1;
   return info;
 }
 
@@ -247,7 +265,8 @@ function bookInfo(book, records) {
 // 点数セルの色。1周目は 赤→黄→緑、2周目以降は薄紫
 function sectionCellClass(info) {
   if (info.round >= 2) return info.cleared ? 'cell-r2-full' : 'cell-r2-part';
-  const pct = info.total > 0 ? (info.correct / info.total) * 100 : 0;
+  const score = info.score != null ? info.score : info.correct;
+  const pct = info.total > 0 ? (score / info.total) * 100 : 0;
   return info.cleared ? 'cell-perfect'
        : pct >= 80 ? 'cell-good'
        : pct >= 50 ? 'cell-mid'
@@ -255,9 +274,29 @@ function sectionCellClass(info) {
        : 'cell-none';
 }
 // 「🏆2」「3周目」の表示
-function passBadge(info) {
-  return info.passCount > 0 ? `<span class="pass-badge" title="合格回数">🏆${info.passCount}</span>` : '';
+function passBadge(info, detail = true) {
+  if (!(info.passCount > 0) && !(info.seqFull > 0)) return '';
+  let html = info.passCount > 0 ? `<span class="pass-badge" title="合格回数">🏆${info.passCount}</span>` : '';
+  if (detail) {
+    const parts = [];
+    if (info.passRandom) parts.push(`🔀${info.passRandom}`);
+    if (info.passSeq)    parts.push(`📋${info.passSeq}`);
+    if (info.passLegacy && (info.passRandom || info.passSeq)) parts.push(`記録前${info.passLegacy}`);
+    if (parts.length) html += `<span class="pass-detail">（${parts.join('・')}）</span>`;
+    if (info.seqFull) html += `<span class="seqfull-badge" title="2周目以降に順番通りで満点。合格回数には数えない">📋${info.total}点×${info.seqFull}</span>`;
+  }
+  return html;
 }
+// 「280/300」と、その下に小さく「最高290」または「前の数え方」
+function scoreHtml(info) {
+  let sub = '';
+  if (info.legacy && info.answered > 0) sub = '<small class="score-sub">前の数え方</small>';
+  else if (info.best != null && info.best > info.score) sub = `<small class="score-sub">最高${info.best}</small>`;
+  return `${info.score}<small>/${info.total}</small>${sub ? '<br>' + sub : ''}`;
+}
+function orderIcon(order) { return order === 'sequential' ? '📋' : '🔀'; }
+function orderName(order) { return order === 'sequential' ? '📋 順番通り' : '🔀 ランダム'; }
+const MODE_NAMES = { normal: '本番テスト', review: '⭐ バツ練習', lucky: '🔺 マグレ練習', 'review-combined': '⭐🔺 バツ＋マグレ練習', flashcard: '🃏 フラッシュカード' };
 function roundBadge(info) {
   return info.round >= 2 ? `<span class="round-badge">${info.round}周目</span>` : '';
 }
@@ -419,6 +458,8 @@ async function loadUserData(uid) {
       state.fcStats[book.id]      = d[`fc_${book.id}`] || {};
     });
     state.archived      = d.archived === true;
+    state.historyLog    = d.history_log || [];
+    state.notices       = d.notices || {};
 
     state.dailyLog      = d.dailyLog      || {};
     state.streak        = d.streak        || 0;
@@ -433,6 +474,8 @@ async function loadUserData(uid) {
     state.sectionStats  = emptyBookRecords();
     state.fcStats       = emptyBookRecords();
     state.archived      = false;
+    state.historyLog    = [];
+    state.notices       = {};
     state.dailyLog      = {};
     state.streak        = 0;
     state.bestStreak    = 0;
@@ -467,6 +510,8 @@ function saveState() {
     lastStudyDate:   state.lastStudyDate,
     tutorialDone:    state.tutorialDone,
     memos:           state.memos,
+    history_log:     state.historyLog || [],
+    notices:         state.notices || {},
     updatedAt:       firebase.firestore.FieldValue.serverTimestamp(),
   };
   BOOKS.forEach(book => {
@@ -486,7 +531,7 @@ function resetState() {
     bookRecords: emptyBookRecords(), sectionStats: emptyBookRecords(), fcStats: emptyBookRecords(),
     dailyLog: {}, streak: 0, bestStreak: 0, points: 0,
     lastStudyDate: null, tutorialDone: state.tutorialDone, memos: {},
-    archived: false,
+    archived: false, historyLog: [], notices: state.notices || {},
   };
   saveState();
   renderHome();
@@ -518,7 +563,10 @@ auth.onAuthStateChanged(async (user) => {
       renderBookPicker();
       showScreen('screen-bookpicker');
       if (!state.tutorialDone) {
+        state.notices = Object.assign({}, state.notices, { [PASS_RULE_NOTICE]: true }); // 初めての生徒はチュートリアルで説明する
         setTimeout(() => openTutorial(), 600);
+      } else if (!state.notices?.[PASS_RULE_NOTICE]) {
+        setTimeout(() => openNotice(), 600);
       }
     }
   } else {
@@ -533,6 +581,17 @@ auth.onAuthStateChanged(async (user) => {
       pendingLoginError = '';
     }
   }
+});
+
+// ===== 1回だけ出すお知らせ =====
+const PASS_RULE_NOTICE = 'pass-rule-2026-10';
+function openNotice() {
+  document.getElementById('notice-modal').classList.remove('hidden');
+}
+document.getElementById('btn-notice-ok').addEventListener('click', () => {
+  document.getElementById('notice-modal').classList.add('hidden');
+  state.notices = Object.assign({}, state.notices, { [PASS_RULE_NOTICE]: true });
+  saveState();
 });
 
 // ===== ID → ダミーメール変換 =====
@@ -684,31 +743,48 @@ function wordsForSection(sectionId) {
 }
 function getSectionStats(sectionId) {
   const info = currentSectionInfo(sectionId);
-  return { total: info.total, correct: info.correct, wrongCount: info.remainWrong };
+  return { total: info.total, correct: info.score, wrongCount: info.remainWrong };
 }
 function currentSectionInfo(sectionId) {
   return sectionInfo(currentBook, currentRecords(), state.sectionStats[currentBook.id], sectionId);
 }
-// セクションの { passCount, round } を取り出す（無ければ作る）
+// セクションの記録 { passCount, lastScore, bestScore, ... } を取り出す（無ければ作る）
 function ensureSecStat(sectionId) {
   if (!state.sectionStats[currentBook.id]) state.sectionStats[currentBook.id] = {};
   const map = state.sectionStats[currentBook.id];
   if (!map[sectionId]) {
     const info = currentSectionInfo(sectionId);
-    map[sectionId] = { passCount: info.passCount, round: info.round };
+    map[sectionId] = { passCount: info.passCount };
   }
   if (map[sectionId].passCount == null) map[sectionId].passCount = 0;
-  if (!map[sectionId].round) map[sectionId].round = 1;
   return map[sectionId];
 }
-// 今の周を最後まで出題し終えて全問正解になっているか（次に始めると新しい周になる）
-function roundIsComplete(sectionId) {
-  const info = currentSectionInfo(sectionId);
-  if (!info.cleared) return false;
-  const st = ensureSecStat(sectionId);
-  if (st.round === 1) return true;
-  const rec = currentRecords();
-  return wordsForSection(sectionId).every(w => (rec[w.no]?.lastRound || 0) >= st.round);
+function nextRoundOf(sectionId) { return currentSectionInfo(sectionId).nextRound; }
+
+// テストの履歴（1回ごとの記録）。新しいものを先頭に、最大300件
+const HISTORY_MAX = 300;
+// 同じ本番の回（runId）の「途中でやめた」行を書き換える。見つかれば true
+function updatePausedHistory(runId, status) {
+  let found = false;
+  (state.historyLog || []).forEach(h => {
+    if (runId && h.runId === runId && h.status === 'paused') { h.status = status; found = true; }
+  });
+  return found;
+}
+function pushHistory(entry) {
+  if (!state.historyLog) state.historyLog = [];
+  state.historyLog.unshift(Object.assign({ at: new Date().toISOString() }, entry));
+  if (state.historyLog.length > HISTORY_MAX) state.historyLog.length = HISTORY_MAX;
+}
+// 答えた1問を、日ごと・単語帳ごと・セクションごとに 🔀／📋 で数える
+function countAnswerOrder() {
+  const key = quiz.order === 'sequential' ? 'answeredSeq' : 'answeredRandom';
+  bumpDaily('answered', currentBook.id);
+  bumpDaily(key, currentBook.id);
+  if (quiz.section && quiz.section.id !== '__all__') {
+    const st = ensureSecStat(quiz.section.id);
+    st[key] = (st[key] || 0) + 1;
+  }
 }
 
 function renderHome() {
@@ -717,14 +793,16 @@ function renderHome() {
   grid.innerHTML = '';
   currentBook.sections.forEach(sec => {
     const info = currentSectionInfo(sec.id);
-    const { correct, total, remainWrong, cleared } = info;
+    const { remainWrong, cleared } = info;
     const card = document.createElement('div');
     card.className = 'section-card' + (cleared ? ' cleared' : '') + (info.round >= 2 ? ' round2' : '');
     card.innerHTML = `
       <div class="card-title">${sec.label}${cleared ? ' ✅' : ''}</div>
       <div class="card-range">${sec.range}</div>
-      <div class="card-progress"><span class="card-score ${sectionCellClass(info)}">${correct}/${total} 点</span></div>
-      ${info.passCount > 0 || info.round >= 2 ? `<div class="card-progress card-badges">${passBadge(info)} ${roundBadge(info)}</div>` : ''}
+      <div class="card-progress"><span class="card-score ${sectionCellClass(info)}">${info.score}/${info.total} 点</span></div>
+      ${info.best != null && info.best > info.score ? `<div class="card-progress card-best">最高 ${info.best}点</div>` : ''}
+      ${info.legacy && info.answered > 0 ? `<div class="card-progress card-best">前の数え方</div>` : ''}
+      ${info.passCount > 0 || info.round >= 2 || info.seqFull > 0 ? `<div class="card-progress card-badges">${passBadge(info, false)} ${roundBadge(info)}</div>` : ''}
       ${remainWrong > 0 ? `<div class="card-progress" style="color:#E05555">残りのバツ ${remainWrong} 個</div>` : ''}
       ${remainWrong > 0 ? `<div class="card-badge">✗</div>` : ''}
     `;
@@ -738,7 +816,7 @@ function openMode(sec) {
   quiz.section = sec;
   document.getElementById('mode-section-title').textContent = `${sec.label}（${sec.range}）`;
   const info = currentSectionInfo(sec.id);
-  const { correct, total } = info;
+  const { total } = info;
   const words = wordsForSection(sec.id);
   const rec = currentRecords();
   const wrongWords  = words.filter(w => isRemainWrong(rec[w.no]));
@@ -746,14 +824,16 @@ function openMode(sec) {
   const combinedLen = words.filter(w => isRemainWrong(rec[w.no]) || isRemainLucky(rec[w.no])).length;
 
   document.getElementById('mode-stats').innerHTML = `
-    <strong>本番の点数:</strong> <span class="${sectionCellClass(info)} mode-score">${correct}/${total}</span>
+    <strong>本番の点数:</strong> <span class="${sectionCellClass(info)} mode-score">${info.score}/${total}</span>
+    ${info.best != null && info.best > info.score ? `<span class="mode-best">最高 ${info.best}</span>` : ''}
+    ${info.legacy && info.answered > 0 ? '<span class="mode-best">前の数え方</span>' : ''}
     ${passBadge(info)} ${roundBadge(info)}<br>
     <strong>残りのバツ:</strong> ${wrongWords.length} 個（これまで ${info.everWrong} 個）／
     <strong>残りのマグレ:</strong> ${luckyWords.length} 個<br>
-    ${info.cleared && roundIsComplete(sec.id)
-      ? '<span class="mode-note">全問正解済み。「テスト開始」で次の周に入ります（点数は300点のまま、間違えた分だけ下がります）</span>'
-      : `<strong>本番でまだ正解していない:</strong> ${total - correct} 個`}
+    <span class="mode-note">次の本番は${info.nextRound}周目。全${total}問を通しで解き、1回で全問正解すると合格${info.nextRound >= 2 ? '（2周目以降はランダムでクリアしたときだけ合格に数えます）' : ''}</span>
   `;
+  document.getElementById('btn-start-normal').textContent = `▶ 本番テスト（全${total}問を通しで）`;
+  updateOrderWarn();
 
   const reviewBtn = document.getElementById('btn-start-review');
   reviewBtn.disabled = wrongWords.length === 0;
@@ -779,7 +859,9 @@ function openMode(sec) {
   const savedBookId = saved && (saved.bookId || (currentBook.id !== 'pastan6' ? currentBook.id : null));
   if (saved && saved.sectionId === sec.id && savedBookId === currentBook.id) {
     resumeBtn.classList.remove('hidden');
-    resumeBtn.textContent = `⏸ 続きから再開（残り ${saved.poolNos.length} 問）`;
+    resumeBtn.textContent = saved.mode === 'normal'
+      ? `⏸ 本番の続きから（あと${saved.poolNos.length}問・${orderName(saved.order || 'random')}）`
+      : `⏸ 練習の続きから（${MODE_NAMES[saved.mode] || '練習'}・あと${saved.poolNos.length}問）`;
   } else {
     resumeBtn.classList.add('hidden');
   }
@@ -797,20 +879,44 @@ function shuffle(arr) {
   return a;
 }
 
-function startQuiz(mode) {
+function startQuiz(mode, opts = {}) {
+  const allWords = wordsForSection(quiz.section.id);
+  const rec = currentRecords();
+  const saved = getSavedQuiz();
+  const savedHere = saved && saved.bookId === currentBook.id && saved.sectionId === quiz.section.id;
+
+  if (mode === 'normal' && !opts.confirmed) {
+    // 途中の本番があるのに最初からやり直すときは確かめる
+    if (savedHere && saved.mode === 'normal') {
+      if (!confirm(`途中の本番があります（あと${saved.poolNos.length}問）。\n最初からやり直すと、途中の回は「途中でやめた回」として履歴に残り、点数は付きません。\n最初からやり直しますか？`)) return;
+    }
+    // 2周目以降を順番通りで始めようとしたら知らせる
+    if (quiz.orderMode === 'sequential' && nextRoundOf(quiz.section.id) >= 2) {
+      openOrderWarnModal();
+      return;
+    }
+  }
+  if (savedHere && saved.mode === 'normal' && mode === 'normal') {
+    if (!updatePausedHistory(saved.run?.id, 'abandoned')) {
+      const done = (saved.run?.correct?.length || 0) + (saved.run?.wrong?.length || 0);
+      pushHistory({ book: currentBook.id, sec: quiz.section.id, mode: 'normal', round: saved.round || 1,
+        order: saved.order || 'random', answered: done, correct: saved.run?.correct?.length || 0,
+        total: allWords.length, status: 'abandoned', resumed: saved.run?.resumed || 0, runId: saved.run?.id || null });
+    }
+  }
   localStorage.removeItem('quiz_resume');
   quiz.mode = mode;
+  quiz.order = quiz.orderMode;
   quiz.sessionCorrect = 0;
   quiz.sessionWrong   = 0;
   quiz.answered       = false;
-  const allWords = wordsForSection(quiz.section.id);
   quiz.allWords = allWords;
-  const rec = currentRecords();
 
-  const applyOrder = arr => quiz.orderMode === 'sequential'
+  const applyOrder = arr => quiz.order === 'sequential'
     ? [...arr].sort((a, b) => a.no.localeCompare(b.no))
     : shuffle(arr);
 
+  quiz.run = null;
   if (mode === 'review') {
     quiz.pool = applyOrder(allWords.filter(w => isRemainWrong(rec[w.no])));
   } else if (mode === 'lucky') {
@@ -818,38 +924,64 @@ function startQuiz(mode) {
   } else if (mode === 'review-combined') {
     quiz.pool = applyOrder(allWords.filter(w => isRemainWrong(rec[w.no]) || isRemainLucky(rec[w.no])));
   } else {
-    // 本番。全問正解で今の周を終えていれば次の周へ（点数は下げず、間違えた分だけ下がる）
-    const st = ensureSecStat(quiz.section.id);
-    if (roundIsComplete(quiz.section.id)) {
-      st.round += 1;
-      saveState();
-    }
-    const round = st.round;
-    quiz.pool = applyOrder(allWords.filter(w =>
-      !rec[w.no]?.correct || (round >= 2 && (rec[w.no]?.lastRound || 0) < round)
-    ));
+    // 本番：毎回そのセクションの全問を通しで解く
+    quiz.pool  = applyOrder(allWords);
+    quiz.round = nextRoundOf(quiz.section.id);
+    quiz.run   = { id: Date.now(), startedAt: new Date().toISOString(), resumed: 0, correct: [], wrong: [] };
   }
   if (quiz.pool.length === 0) { alert('出題できる単語がありません。'); return; }
   quiz.totalPool = quiz.pool.length;
   document.getElementById('quiz-section-label').textContent = quiz.section.label;
-  const modeLabels = { review: '⭐ バツ復習', lucky: '🔺 まぐれ復習', 'review-combined': '⭐🔺 バツ+まぐれ復習' };
-  document.getElementById('quiz-mode-label').textContent = modeLabels[mode] || '通常テスト';
+  setQuizModeLabel();
   showScreen('screen-quiz');
   nextQuestion();
+}
+
+// テスト中の上の表示：「本番テスト 🔀ランダム」など
+function setQuizModeLabel() {
+  const el = document.getElementById('quiz-mode-label');
+  if (quiz.mode === 'normal') {
+    const warn = quiz.order === 'sequential' && quiz.round >= 2;
+    el.innerHTML = `本番テスト ${quiz.round}周目 ${orderIcon(quiz.order)}${warn ? '<span class="quiz-warn">順番通り（合格に数えません）</span>' : ''}`;
+  } else {
+    el.textContent = `${MODE_NAMES[quiz.mode] || '練習'}（点数に入りません） ${orderIcon(quiz.order)}`;
+  }
+}
+
+// ===== 順番通りの知らせ（2周目以降） =====
+const ORDER_WARN_TEXT = '2周目以降の合格扱いになるには、ランダムでクリアする必要があります。順番通りで解いた分は、合格回数（🏆）に数えません。';
+function updateOrderWarn() {
+  const banner = document.getElementById('order-warn-banner');
+  if (!banner || !quiz.section || !currentBook) return;
+  const show = quiz.orderMode === 'sequential' && nextRoundOf(quiz.section.id) >= 2;
+  banner.classList.toggle('hidden', !show);
+}
+function openOrderWarnModal() {
+  document.getElementById('order-warn-modal').classList.remove('hidden');
+}
+function closeOrderWarnModal() {
+  document.getElementById('order-warn-modal').classList.add('hidden');
+}
+function setOrderMode(order) {
+  quiz.orderMode = order;
+  document.querySelectorAll('.order-btn').forEach(b => b.classList.toggle('active', b.dataset.order === order));
+  updateOrderWarn();
 }
 
 function nextQuestion() {
   if (quiz.pool.length === 0) { showComplete(); return; }
   quiz.current  = quiz.pool.shift();
   quiz.answered = false;
+  quiz.currentRecorded = false;
 
-  const total = (quiz.mode === 'review' || quiz.mode === 'lucky' || quiz.mode === 'review-combined')
-    ? quiz.totalPool
-    : quiz.allWords.length;
-  const done = quiz.sessionCorrect + quiz.sessionWrong;
-  const pct  = total > 0 ? Math.round((done / total) * 100) : 0;
+  const isNormal = quiz.mode === 'normal' && quiz.run;
+  const total = isNormal ? quiz.allWords.length : quiz.totalPool;
+  const done  = isNormal ? quiz.run.correct.length + quiz.run.wrong.length : quiz.sessionCorrect + quiz.sessionWrong;
+  const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
   document.getElementById('progress-bar').style.width = pct + '%';
-  document.getElementById('progress-text').textContent = `${done} / ${total}`;
+  document.getElementById('progress-text').textContent = isNormal
+    ? `${done} / ${total}　点数 ${total - quiz.run.wrong.length}/${total}`
+    : `${done} / ${total}`;
   document.getElementById('word-display').textContent  = quiz.current.word;
   document.getElementById('word-no').textContent       = `No.${quiz.current.no}`;
 
@@ -964,12 +1096,10 @@ function onAnswer(chosen, btn) {
     r.wrongCount = (r.wrongCount || 0) + 1;
     r.practiceOk = false;   // 間違えたので「残りのバツ」に戻る
     r.lucky      = false;
-    if (quiz.mode === 'normal') {
-      r.correct   = false;  // 本番の点数が下がるのは通常テストのときだけ
-      r.lastRound = ensureSecStat(quiz.section.id).round;
-    }
-    bumpDaily('answered', currentBook.id);
+    if (quiz.mode === 'normal' && quiz.run) quiz.run.wrong.push(quiz.current.no); // 本番の点数は解き終えたときにまとめて付ける
+    countAnswerOrder();
     quiz.sessionWrong++;
+    quiz.currentRecorded = true;
     saveState();
     showNextArea('wrong');
   } else {
@@ -997,11 +1127,11 @@ function showNextArea(type) {
 
 // ===== Streak / Points =====
 function updateStreak() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKey();
   if (state.lastStudyDate === today) return;
 
   const yest = new Date(); yest.setDate(yest.getDate() - 1);
-  const yesterdayStr = yest.toISOString().slice(0, 10);
+  const yesterdayStr = dateKey(yest);
 
   if (state.lastStudyDate === yesterdayStr) {
     state.streak += 1;
@@ -1021,13 +1151,12 @@ function confirmAnswer(isLucky) {
   r.attempts++;
   r.lucky = isLucky;
   if (isLucky) r.luckyCount = (r.luckyCount || 0) + 1;
-  if (quiz.mode === 'normal') {
-    r.correct   = true;
-    r.lastRound = ensureSecStat(quiz.section.id).round;
-  } else {
+  if (quiz.mode === 'normal' && quiz.run) {
+    quiz.run.correct.push(quiz.current.no);   // 本番の点数は解き終えたときにまとめて付ける
+  } else if (quiz.mode !== 'normal') {
     r.practiceOk = true;    // 練習で正解 → バツ克服（本番の点数は動かさない）
   }
-  bumpDaily('answered', currentBook.id);
+  countAnswerOrder();
   updateStreak();
   saveState();
   nextQuestion();
@@ -1048,19 +1177,38 @@ function getSavedQuiz() {
 }
 
 function saveQuizAndGoBack() {
-  const remainingPool = quiz.current ? [quiz.current, ...quiz.pool] : quiz.pool;
-  if (remainingPool.length > 0) {
+  // 今の問題をもう答えて記録済み（不正解）なら、続きには入れない。正解のあと「確信／マグレ」を押す前なら、もう一度出す
+  const remainingPool = quiz.current && !quiz.currentRecorded ? [quiz.current, ...quiz.pool] : quiz.pool;
+  const isAll = quiz.section?.id === '__all__';
+  if (remainingPool.length > 0 && !isAll) {
     localStorage.setItem('quiz_resume', JSON.stringify({
       bookId:       currentBook.id,
       sectionId:    quiz.section.id,
       sectionLabel: quiz.section.label,
       sectionRange: quiz.section.range,
       mode:         quiz.mode,
+      order:        quiz.order || 'random',
+      round:        quiz.round || 1,
+      run:          quiz.run || null,
       poolNos:      remainingPool.map(w => w.no),
+      totalPool:    quiz.totalPool,
       sessionCorrect: quiz.sessionCorrect,
       sessionWrong:   quiz.sessionWrong,
     }));
   }
+  // 履歴：途中でやめた（本番は続きから解ける）
+  const answered = quiz.mode === 'normal' && quiz.run
+    ? quiz.run.correct.length + quiz.run.wrong.length
+    : quiz.sessionCorrect + quiz.sessionWrong;
+  if (answered > 0) {
+    pushHistory({ book: currentBook.id, sec: quiz.section.id, mode: quiz.mode, round: quiz.mode === 'normal' ? quiz.round : null,
+      order: quiz.order || 'random', answered,
+      correct: quiz.mode === 'normal' && quiz.run ? quiz.run.correct.length : quiz.sessionCorrect,
+      total: quiz.mode === 'normal' ? quiz.allWords.length : quiz.totalPool,
+      status: 'paused', resumed: quiz.run?.resumed || 0, runId: quiz.run?.id || null });
+    saveState();
+  }
+  if (isAll) { renderHome(); showScreen('screen-home'); return; }
   openMode(quiz.section);
 }
 
@@ -1069,14 +1217,27 @@ function resumeQuiz() {
   if (!saved) return;
   quiz.section      = { id: saved.sectionId, label: saved.sectionLabel, range: saved.sectionRange };
   quiz.mode         = saved.mode;
-  quiz.sessionCorrect = saved.sessionCorrect;
-  quiz.sessionWrong   = saved.sessionWrong;
+  quiz.order        = saved.order || 'random';
+  quiz.round        = saved.round || 1;
+  quiz.run          = saved.run || null;
+  if (quiz.run) quiz.run.resumed = (quiz.run.resumed || 0) + 1;
+  quiz.sessionCorrect = saved.sessionCorrect || 0;
+  quiz.sessionWrong   = saved.sessionWrong || 0;
   quiz.answered     = false;
   quiz.allWords     = wordsForSection(quiz.section.id);
   quiz.pool         = saved.poolNos.map(no => currentBook.words().find(w => w.no === no)).filter(Boolean);
+  quiz.totalPool    = saved.totalPool || (quiz.pool.length + quiz.sessionCorrect + quiz.sessionWrong);
+  if (quiz.mode === 'normal' && !quiz.run) {
+    // 通しの決まりより前に保存された本番の続き → 新しい回として最初からやり直してもらう
+    localStorage.removeItem('quiz_resume');
+    alert('本番テストは「毎回全問を通しで解く」決まりになりました。最初から始めてください。');
+    openMode(quiz.section);
+    return;
+  }
   if (quiz.pool.length === 0) { localStorage.removeItem('quiz_resume'); return; }
+  localStorage.removeItem('quiz_resume');
   document.getElementById('quiz-section-label').textContent = quiz.section.label;
-  document.getElementById('quiz-mode-label').textContent = quiz.mode === 'review' ? '⭐ バツ復習' : '通常テスト';
+  setQuizModeLabel();
   showScreen('screen-quiz');
   nextQuestion();
 }
@@ -1085,30 +1246,65 @@ function resumeQuiz() {
 function showComplete() {
   lastCompleteType = 'quiz';
   localStorage.removeItem('quiz_resume');
-  document.getElementById('btn-complete-retry').textContent = 'もう一度';
+  document.getElementById('btn-complete-retry').textContent = quiz.mode === 'normal' ? 'もう一度（最初から通しで）' : 'もう一度';
   document.getElementById('btn-fc-retry-unknown').classList.add('hidden');
-  const total = quiz.sessionCorrect + quiz.sessionWrong;
-  const pct   = total > 0 ? Math.round((quiz.sessionCorrect / total) * 100) : 0;
   const isAll = quiz.section.id === '__all__';
-  const info = isAll ? null : currentSectionInfo(quiz.section.id);
-  const allCleared = !isAll && info.cleared;
-  let passLine = '';
-  if (quiz.mode === 'normal' && allCleared) {
-    // 本番で全問正解 → 合格回数を1つ増やす
+  let title = '練習おわり！', body = '';
+
+  if (quiz.mode === 'normal' && quiz.run) {
+    // 本番を最後まで解き終えた → この回の点数で、単語の「正解」と点数・合格をまとめて付ける
+    const rec   = currentRecords();
+    const total = quiz.allWords.length;
+    const okSet = new Set(quiz.run.correct);
+    quiz.allWords.forEach(w => { wordRec(rec, w.no).correct = okSet.has(w.no); });
+    const score = quiz.run.correct.length;
     const st = ensureSecStat(quiz.section.id);
-    st.passCount = (st.passCount || 0) + 1;
+    st.lastScore    = score;
+    st.bestScore    = Math.max(st.bestScore || 0, score);
+    st.lastRunRound = quiz.round;
+    st.lastRunAt    = new Date().toISOString();
+    st.runs         = (st.runs || 0) + 1;
+    const full = score === total;
+    let status = 'done';
+    let passLine;
+    if (full && (quiz.round === 1 || quiz.order === 'random')) {
+      st.passCount = (st.passCount || 0) + 1;
+      if (!st.passes) st.passes = [];
+      st.passes.push({ date: todayKey(), round: quiz.round, order: quiz.order, score, resumed: quiz.run.resumed || 0 });
+      status = 'pass';
+      title = '🎉 合格！';
+      passLine = `<strong style="color:#FF6B9D">🏆 ${st.passCount}回目の合格！（${orderName(quiz.order)}）</strong>`;
+    } else if (full) {
+      st.seqFullCount = (st.seqFullCount || 0) + 1;
+      status = 'seqFull';
+      title = '満点！';
+      passLine = `<span class="complete-warn">⚠️ ${ORDER_WARN_TEXT}<br>今回の満点は記録に残りますが、合格回数は増えません。</span>`;
+    } else {
+      title = '本番テスト終了';
+      passLine = `<span class="mode-note">あと${total - score}問で満点。1回のテストで全問正解すると合格です。<br>間違えた単語は「バツ練習」で練習しましょう。</span>`;
+    }
+    updatePausedHistory(quiz.run.id, 'pausedResumed');
+    pushHistory({ book: currentBook.id, sec: quiz.section.id, mode: 'normal', round: quiz.round, order: quiz.order,
+      answered: total, correct: score, total, status, resumed: quiz.run.resumed || 0, runId: quiz.run.id });
     saveState();
-    passLine = `<strong style="color:#FF6B9D">🏆 ${st.passCount}回目の合格！</strong>`;
-  } else if (quiz.mode !== 'normal') {
-    passLine = '<span class="mode-note">練習モードの結果は、本番の点数には入りません</span>';
+    body = `
+      <strong>今回の点数:</strong> ${score}/${total}（${quiz.round}周目・${orderName(quiz.order)}）<br>
+      ${st.bestScore > score ? `<strong>最高:</strong> ${st.bestScore}/${total}<br>` : ''}
+      ${passLine}`;
+  } else {
+    const answered = quiz.sessionCorrect + quiz.sessionWrong;
+    const pct = answered > 0 ? Math.round((quiz.sessionCorrect / answered) * 100) : 0;
+    pushHistory({ book: currentBook.id, sec: quiz.section.id, mode: quiz.mode, round: null, order: quiz.order || 'random',
+      answered, correct: quiz.sessionCorrect, total: quiz.totalPool, status: 'done', resumed: 0 });
+    saveState();
+    const info = isAll ? null : currentSectionInfo(quiz.section.id);
+    body = `
+      <strong>今回の正答率:</strong> ${quiz.sessionCorrect}/${answered}（${pct}%）<br>
+      ${isAll ? '' : `<strong>本番の点数:</strong> ${info.score}/${info.total}（練習では変わりません）<br>`}
+      <span class="mode-note">練習の結果は、本番の点数と合格には入りません。正解した単語は「残りのバツ」から外れます。</span>`;
   }
-  document.getElementById('complete-title').textContent =
-    quiz.mode === 'normal' && allCleared ? '🎉 セクション合格！' : 'ラウンド完了！';
-  document.getElementById('complete-stats').innerHTML = `
-    <strong>今回の正答率:</strong> ${quiz.sessionCorrect}/${total}（${pct}%）<br>
-    ${isAll ? '' : `<strong>本番の点数:</strong> ${info.correct}/${info.total}<br>`}
-    ${passLine}
-  `;
+  document.getElementById('complete-title').textContent = title;
+  document.getElementById('complete-stats').innerHTML = body;
   document.getElementById('progress-bar').style.width = '100%';
   showScreen('screen-complete');
 }
@@ -1142,13 +1338,13 @@ const TUTORIAL_STEPS = [
   },
   {
     icon: '🏆',
-    title: '全問正解で合格！',
-    body: '「テスト開始（全問）」が本番です。範囲を全問正解すると合格になり、🏆の横に合格した回数が出ます。\n合格したあとにもう一度やると2周目。点数は満点から始まり、間違えた分だけ下がります。',
+    title: '通しで全問正解すると合格！',
+    body: '「本番テスト」は、毎回そのセクションの全問を最初から最後まで解きます。1回のテストで全問正解すると合格で、🏆の横に合格した回数が出ます。\n合格したあとは2周目。2周目以降は、🔀ランダムで全問正解したときだけ合格に数えます。',
   },
   {
     icon: '⭐',
     title: '復習モードを活用しよう',
-    body: 'セクション画面では、バツのみ・まぐれのみ・バツ+まぐれの3パターンで集中復習できます！\n復習は練習なので本番の点数は動きません。復習で正解すると「残りのバツ」が減ります。',
+    body: '間違えた単語は「バツ練習」「マグレ練習」で集中して練習できます！\n練習は本番の点数・合格には入りません。練習で正解すると「残りのバツ」が減ります。',
   },
   {
     icon: '🔥',
@@ -1287,7 +1483,8 @@ function renderMypageStats() {
   list.innerHTML = '';
   book.sections.forEach(sec => {
     const info = sectionInfo(book, rec, state.sectionStats[book.id], sec.id);
-    const { correct, total, cleared } = info;
+    const { total, cleared } = info;
+    const correct = info.score;
     const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
     const item = document.createElement('div');
     item.className = 'sp-item';
@@ -1374,7 +1571,7 @@ function renderStatsBody() {
 
   // 今日の数字
   document.getElementById('stats-today').innerHTML = `
-    <div class="stat-item" onclick="showHelp('today', this)"><div class="stat-num">${todayBook.answered || 0}</div><div class="stat-label">今日解いた数 <span class="help-mark">?</span></div></div>
+    <div class="stat-item" onclick="showHelp('today', this)"><div class="stat-num">${todayBook.answered || 0}</div><div class="stat-label">今日解いた数 <span class="help-mark">?</span>${todayBook.answered ? `<br>🔀${todayBook.answeredRandom || 0}・📋${todayBook.answeredSeq || 0}` : ''}</div></div>
     <div class="stat-item" onclick="showHelp('fc', this)"><div class="stat-num">${todayBook.fcCards || 0}</div><div class="stat-label">今日の🃏枚数 <span class="help-mark">?</span></div></div>
     <div class="stat-item" onclick="showHelp('diff', this)"><div class="stat-num">${diffLabel(diff)}</div><div class="stat-label">前回比 <span class="help-mark">?</span></div></div>
   `;
@@ -1412,6 +1609,9 @@ function renderStatsBody() {
   document.getElementById('stats-section-table').innerHTML =
     sectionTableHtml(book, rec, state.sectionStats[book.id] || {});
 
+  // 履歴（その単語帳の分だけ）
+  renderHistory((state.historyLog || []).filter(h => h.book === book.id), document.getElementById('stats-history'), 'stats');
+
   // カレンダーとグラフ
   statsCalViewDate = new Date();
   renderCalendarView(state.dailyLog, document.getElementById('stats-calendar'), 'stats');
@@ -1425,7 +1625,7 @@ function renderStreakWeek() {
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const dateStr  = d.toISOString().slice(0, 10);
+    const dateStr  = dateKey(d);
     const isToday  = i === 0;
     const studied  = !!state.dailyLog[dateStr];
     const mastered = state.dailyLog[dateStr]?.mastered || 0;
@@ -1662,7 +1862,13 @@ function buildStudentRow(student, book) {
     vis:       bookVisibility(student, book.id),
     shown:     isShownInBook(student, book.id),
     archived:  student.archived === true,
-    passTotal: sections.reduce((sum, x) => sum + x.passCount, 0),
+    passTotal:  sections.reduce((sum, x) => sum + x.passCount, 0),
+    passRandom: sections.reduce((sum, x) => sum + x.passRandom, 0),
+    passSeq:    sections.reduce((sum, x) => sum + x.passSeq, 0),
+    passLegacy: sections.reduce((sum, x) => sum + x.passLegacy, 0),
+    seqFull:    sections.reduce((sum, x) => sum + x.seqFull, 0),
+    todayRandom: todayLog.answeredRandom || 0,
+    todaySeq:    todayLog.answeredSeq || 0,
   };
 }
 
@@ -1672,9 +1878,11 @@ function sortValue(row, key) {
   if (key.startsWith('sec:')) {
     const idx = Number(key.slice(4));
     const s = row.sections[idx];
-    return s ? s.correct + s.passCount * 1000 : 0; // 合格回数が多いほど上
+    return s ? s.score + s.passCount * 1000 : 0; // 合格回数が多いほど上
   }
   if (key === 'total')       return row.info.correct;
+  if (key === 'passTotal')   return row.passTotal;
+  if (key === 'passRandom')  return row.passRandom;
   if (key === 'today')       return row.todayAnswered;
   if (key === 'everWrong')   return row.info.everWrong;
   if (key === 'remainWrong') return row.info.remainWrong;
@@ -1796,6 +2004,7 @@ function renderAdminTable(rows, book) {
           ${thHelp('id', 'ID', 'col-id')}
           ${book.sections.map((s, i) => thHelp(`sec:${i}`, s.label.replace('テスト ', 'T').replace(/^(2級)?パス単 /, 'P'), 'col-sec')).join('')}
           ${thHelp('total', '合計', 'col-total')}
+          ${thHelp('passTotal', '🏆<br>合格', 'col-pass')}
           ${thHelp('today', '今日', 'col-today')}
           ${thHelp('everWrong', 'これまでの<br>バツ', 'col-wrong')}
           ${thHelp('remainWrong', '残りの<br>バツ', 'col-wrong')}
@@ -1825,8 +2034,8 @@ function renderAdminTable(rows, book) {
     `;
 
     row.sections.forEach(sec => {
-      html += `<td class="col-sec ${sectionCellClass(sec)}">${sec.correct}<br><small>/${sec.total}</small>
-        ${sec.passCount > 0 || sec.round >= 2 ? `<div class="cell-badges">${passBadge(sec)} ${roundBadge(sec)}</div>` : ''}</td>`;
+      html += `<td class="col-sec ${sectionCellClass(sec)}">${scoreHtml(sec)}
+        ${sec.passCount > 0 || sec.round >= 2 || sec.seqFull > 0 ? `<div class="cell-badges">${passBadge(sec)} ${roundBadge(sec)}</div>` : ''}</td>`;
     });
 
     const fcCell = (fcs.cards || 0) > 0
@@ -1839,7 +2048,11 @@ function renderAdminTable(rows, book) {
         <small>${info.correct}/${totalWords}</small><br>
         <small>前回比 ${diffLabel(row.diff)}</small>
       </td>
-      <td class="col-today">${row.todayAnswered > 0 ? `${row.todayAnswered}問` : '—'}</td>
+      <td class="col-pass">${row.passTotal > 0 ? `🏆${row.passTotal}` : '—'}
+        ${row.passRandom || row.passSeq ? `<br><small>🔀${row.passRandom}・📋${row.passSeq}${row.passLegacy ? `・記録前${row.passLegacy}` : ''}</small>` : ''}
+        ${row.seqFull ? `<br><small class="seqfull-badge">📋満点×${row.seqFull}</small>` : ''}</td>
+      <td class="col-today">${row.todayAnswered > 0 ? `${row.todayAnswered}問` : '—'}
+        ${row.todayRandom || row.todaySeq ? `<br><small>🔀${row.todayRandom}・📋${row.todaySeq}</small>` : ''}</td>
       <td class="col-wrong">${info.everWrong > 0 ? `⭐${info.everWrong}` : '—'}</td>
       <td class="col-wrong ${info.remainWrong > 0 ? 'cell-low' : ''}">${info.remainWrong > 0 ? `⭐${info.remainWrong}` : '—'}</td>
       <td class="col-wrong">${info.everLucky > 0 ? `🔺${info.everLucky}` : '—'}</td>
@@ -1954,6 +2167,7 @@ function renderDetailTab(tab) {
   body.innerHTML = '';
   if (tab === 'calendar')      renderCalendarView(user.dailyLog || {}, body, 'detail');
   else if (tab === 'chart')    renderLineChart(user.dailyLog || {}, body);
+  else if (tab === 'history')  renderHistory(user.history_log || [], body, 'detail');
   else                         renderUserProgress(user, body);
 }
 
@@ -1986,8 +2200,8 @@ function sectionTableHtml(book, records, secStats, opts = {}) {
   rows.forEach(({ sec, info }) => {
     html += `<tr>
       <td class="st-label">${sec.label}<br><small>${sec.range}</small></td>
-      <td class="st-score ${sectionCellClass(info)}">${info.correct}/${info.total}
-        ${info.passCount > 0 || info.round >= 2 ? `<div class="cell-badges">${passBadge(info)} ${roundBadge(info)}</div>` : ''}</td>
+      <td class="st-score ${sectionCellClass(info)}">${scoreHtml(info)}
+        ${info.passCount > 0 || info.round >= 2 || info.seqFull > 0 ? `<div class="cell-badges">${passBadge(info)} ${roundBadge(info)}</div>` : ''}</td>
       <td>${info.everWrong || '—'}</td>
       <td class="${info.remainWrong > 0 ? 'cell-low' : ''}">${info.remainWrong || '—'}</td>
       <td>${info.everLucky || '—'}</td>
@@ -1997,6 +2211,57 @@ function sectionTableHtml(book, records, secStats, opts = {}) {
   });
   html += '</tbody></table></div>';
   return html;
+}
+
+// テストの履歴。filter: 'all' | 'random' | 'sequential'
+let historyFilter = { detail: 'all', stats: 'all' };
+let historyLogs   = { detail: [], stats: [] };
+const HISTORY_STATUS = {
+  pass:      '🏆 合格',
+  seqFull:   '満点（順番通りのため合格に数えない）',
+  done:      '最後まで解いた',
+  paused:    '途中でやめた（続きから解ける）',
+  pausedResumed: '途中でやめた（あとで続きから解いた）',
+  abandoned: '途中でやめた（続きは解かずにやり直したので点数なし）',
+};
+function bookShortName(bookId) { return (BOOKS.find(b => b.id === bookId) || {}).name || bookId; }
+function sectionLabel(bookId, secId) {
+  if (secId === '__all__') return '全セクション';
+  const book = BOOKS.find(b => b.id === bookId);
+  return (book?.sections.find(x => x.id === secId) || {}).label || secId;
+}
+function renderHistory(log, container, target) {
+  historyLogs[target] = log || [];
+  const f = historyFilter[target];
+  const list = historyLogs[target].filter(h => f === 'all' || (h.order || 'random') === f);
+  const chips = ['all', 'random', 'sequential'].map(k =>
+    `<button class="chip${f === k ? ' active' : ''}" onclick="setHistoryFilter('${target}','${k}')">${k === 'all' ? 'すべて' : orderName(k)}</button>`).join('');
+  let html = `<div class="history-head"><div class="filter-chips">${chips}</div>
+    <span class="help-mark" onclick="showHelp('history', this)">?</span></div>`;
+  if (list.length === 0) {
+    html += '<p class="detail-empty">履歴はまだありません。（2026年10月22日から記録しています）</p>';
+  } else {
+    html += '<div class="history-list">' + list.map(h => {
+      const d = new Date(h.at);
+      const when = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const isNormal = h.mode === 'normal';
+      const cls = h.status === 'pass' ? ' h-pass' : h.status === 'seqFull' ? ' h-seqfull' : ['paused', 'pausedResumed', 'abandoned'].includes(h.status) ? ' h-quit' : '';
+      return `<div class="history-item${isNormal ? ' h-normal' : ''}${cls}">
+        <div class="h-top"><span class="h-when">${when}</span>
+          <span class="h-what">${bookShortName(h.book)}・${sectionLabel(h.book, h.sec)}</span></div>
+        <div class="h-mid">${MODE_NAMES[h.mode] || h.mode}${isNormal && h.round ? ` ${h.round}周目` : ''}　${orderIcon(h.order)}
+          ${isNormal ? `<strong>${h.correct}/${h.total}</strong>` : `${h.answered}問中 ${h.correct}正解`}
+          ${isNormal && ['paused', 'pausedResumed', 'abandoned'].includes(h.status) ? `<span class="h-sub">（${h.answered}/${h.total}問まで。点数は途中まで）</span>` : ''}</div>
+        <div class="h-status">${HISTORY_STATUS[h.status] || ''}${h.resumed ? `・続きから${h.resumed}回` : ''}</div>
+      </div>`;
+    }).join('') + '</div>';
+  }
+  container.innerHTML = html;
+}
+function setHistoryFilter(target, f) {
+  historyFilter[target] = f;
+  const el = target === 'detail' ? document.getElementById('detail-body') : document.getElementById('stats-history');
+  renderHistory(historyLogs[target], el, target);
 }
 
 // 後方互換
@@ -2717,22 +2982,24 @@ document.getElementById('tab-admin').addEventListener('click', () => {
 // ===== 項目の説明（タップで出す）と使い方ページ =====
 // key → { title, text, anchor }。anchor は使い方ページの見出しの id
 const HELP = {
-  name:        { title: '氏名', text: 'タップすると、その生徒のカレンダー・グラフ・単語帳ごとの表が開きます。', anchor: 'm-screens' },
+  name:        { title: '氏名', text: 'タップすると、その生徒のカレンダー・グラフ・単語帳ごとの表・履歴が開きます。', anchor: 'm-screens' },
   id:          { title: 'ID', text: '生徒がログインに使うIDです。', anchor: 'm-screens' },
-  sec:         { title: 'セクションの点数', text: '本番（通常テスト）で今正解になっている語数です。300語の範囲なら300点満点。全問正解で合格になり、🏆の横に合格した回数が出ます。2周目以降は薄紫になり、間違えた分だけ点数が下がります。', anchor: 'm-pass' },
-  score:       { title: '本番の点数', text: '本番（通常テスト）で今正解になっている語数です。全問正解で合格。🏆の横の数字は合格した回数、「◯周目」は今何周目かです。', anchor: 'm-pass' },
-  total:       { title: '合計（習得語数）', text: 'この単語帳で今正解になっている語数の合計と、その割合です。「前回比」は、最後に勉強した日と、その前の勉強日との差です。', anchor: 'm-columns' },
-  today:       { title: '今日解いた数', text: '今日、この単語帳のテスト（本番・練習とも）で答えた問題の数です。フラッシュカードは入りません。', anchor: 'm-columns' },
+  sec:         { title: 'セクションの点数', text: '直近の本番テスト（全問を通しで解いた回）の点数です。下の小さい「最高」は、これまでの最高点。1回のテストで全問正解すると合格で、🏆の横に合格回数と、その内訳（🔀ランダム・📋順番通り）が出ます。色は直近の回が何周目だったかで変わり、2周目以降は薄紫です。「前の数え方」は、まだ新しい決まりの本番を解いていないセクションです。', anchor: 'm-pass' },
+  score:       { title: '本番の点数', text: '直近の本番テスト（全問を通しで解いた回）の点数です。「最高」はこれまでの最高点。1回のテストで全問正解すると合格です。🏆の横は合格回数と内訳、「◯周目」は直近の回が何周目だったかです。', anchor: 'm-pass' },
+  total:       { title: '合計（習得語数）', text: 'この単語帳で、直近の本番テストで正解した語数の合計と、その割合です。「前回比」は、最後に勉強した日と、その前の勉強日との差です。', anchor: 'm-columns' },
+  passTotal:   { title: '🏆 合格', text: 'この単語帳の全セクションの合格回数の合計です。下の小さい数字は、そのうちランダムで取った合格（🔀）と、順番通りで取った合格（📋。1周目だけ）の数です。「記録前」は、ランダムか順番通りかを記録する前（2026年10月22日より前）の合格です。「📋満点」は、2周目以降に順番通りで満点を取ったが、合格に数えなかった回数です。', anchor: 'm-order' },
+  today:       { title: '今日解いた数', text: '今日、この単語帳のテスト（本番・練習とも）で答えた問題の数です。下の小さい数字は、そのうち🔀ランダムで解いた数と📋順番通りで解いた数。フラッシュカードは入りません。', anchor: 'm-order' },
   diff:        { title: '前回比', text: '最後に勉強した日の習得語数と、その前の勉強日の習得語数との差です。改修（2026年10月）より前の日は比べられません。', anchor: 'm-columns' },
   everWrong:   { title: 'これまでのバツ', text: '今までに1回でも間違えたことがある単語の数です。克服しても減りません。どれだけつまずいたかが分かります。', anchor: 'm-wrong' },
-  remainWrong: { title: '残りのバツ', text: '間違えた単語のうち、そのあと「バツのみ復習」などの練習でまだ正解できていない単語の数です。練習で正解すると減り、また間違えると増えます。', anchor: 'm-wrong' },
+  remainWrong: { title: '残りのバツ', text: '間違えた単語のうち、そのあと「バツ練習」などの練習でまだ正解できていない単語の数です。練習で正解すると減り、また間違えると増えます。', anchor: 'm-wrong' },
   everLucky:   { title: 'これまでのマグレ', text: '正解したときに生徒が「マグレの正解」と申告したことがある単語の数です。', anchor: 'm-wrong' },
   remainLucky: { title: '残りのマグレ', text: '最後の正解が「マグレ」だった単語の数です。次に「確信して正解」を選ぶと減ります。', anchor: 'm-wrong' },
   fc:          { title: 'フラッシュカード', text: 'フラッシュカードをやった回数、めくった枚数、最後にやった日です。フラッシュカードは練習なので、本番の点数には入りません。', anchor: 'm-fc' },
   fcKnown:     { title: '🃏 わかった語数', text: 'フラッシュカードで最後に「わかる」を押した単語の数です。「わからない」を押すと外れます。', anchor: 'm-fc' },
   updated:     { title: '最終更新', text: 'その生徒の記録が最後に保存された日です。', anchor: 'm-columns' },
+  history:     { title: '履歴', text: 'テストやフラッシュカードを1回やるごとの記録です。日時、単語帳とセクション、本番か練習か、何周目か、🔀ランダムか📋順番通りか、点数、最後まで解いたか・途中でやめたかが出ます。新しい順に最大300回ぶん。2026年10月22日から記録しています。', anchor: 'm-history' },
   calendar:    { title: 'カレンダー', text: '色の付いた日は勉強した日です。数字は、その日にテストで答えた数。🃏の数字は、その日にフラッシュカードで「わかる」を押した数です。改修より前の日は、その日の習得語数が出ます。', anchor: 'm-graph' },
-  chart:       { title: 'グラフ', text: 'ピンクの線は、全単語帳の習得語数（本番で今正解になっている語数）です。薄紫の線は、それまでに到達した最高の習得語数で、減りません。2本の差が、一度覚えたあとに忘れた（間違えて落ちた）分です。点線は残りのバツの数で、2026年10月21日から記録しています。', anchor: 'm-graph' },
+  chart:       { title: 'グラフ', text: 'ピンクの線は、全単語帳の習得語数（直近の本番テストで正解した語数）です。薄紫の線は、それまでに到達した最高の習得語数で、減りません。2本の差が、一度覚えたあとに忘れた分です。点線は残りのバツの数で、2026年10月21日から記録しています。', anchor: 'm-graph' },
 };
 
 let helpPopEl = null;
@@ -2758,7 +3025,8 @@ function showHelp(key, el, opts = {}) {
     ? `<div class="help-sort">
          <button onclick="adminSort('${opts.sortKey}', -1)">⬇ 多い順に並べる</button>
          <button onclick="adminSort('${opts.sortKey}', 1)">⬆ 少ない順に並べる</button>
-       </div>`
+       </div>
+       ${opts.sortKey === 'passTotal' ? `<div class="help-sort"><button onclick="adminSort('passRandom', -1)">🔀 ランダムでの合格が多い順</button></div>` : ''}`
     : '';
   pop.innerHTML = `
     <div class="help-title">${h.title}</div>
@@ -2816,7 +3084,9 @@ function manualHtml(audience) {
     <a href="#" onclick="openManual('m-screens');return false;">画面の説明</a>
     ${T(`<a href="#" onclick="openManual('m-columns');return false;">生徒一覧の列と記号</a>`)}
     <a href="#" onclick="openManual('m-pass');return false;">合格と周回</a>
+    <a href="#" onclick="openManual('m-order');return false;">ランダムと順番通り</a>
     <a href="#" onclick="openManual('m-modes');return false;">本番と練習</a>
+    <a href="#" onclick="openManual('m-history');return false;">履歴</a>
     <a href="#" onclick="openManual('m-wrong');return false;">バツ数・マグレ数</a>
     <a href="#" onclick="openManual('m-fc');return false;">フラッシュカード</a>
     ${T(`<a href="#" onclick="openManual('m-list');return false;">生徒を一覧に出す・外す</a>
@@ -2827,14 +3097,14 @@ function manualHtml(audience) {
   <h3 id="m-screens">画面の説明</h3>
   ${teacher ? `
   <ul>
-    <li><strong>生徒一覧</strong>：生徒ごとの点数・バツ数・フラッシュカードなどを、単語帳ごとに見ます。氏名をタップすると、その生徒のカレンダー・グラフ・単語帳ごとの表が開きます。列の見出しをタップすると、その数字の説明と、並べ替えのボタンが出ます。</li>
+    <li><strong>生徒一覧</strong>：生徒ごとの点数・合格回数・バツ数・フラッシュカードなどを、単語帳ごとに見ます。氏名をタップすると、その生徒のカレンダー・グラフ・単語帳ごとの表・履歴が開きます。列の見出しをタップすると、その数字の説明と、並べ替えのボタンが出ます。</li>
     <li><strong>教師一覧</strong>：先生のアカウントの一覧です。新しい先生の作成、生徒への変更ができます。</li>
     <li><strong>単語一覧</strong>：単語帳ごとの単語と日本語訳の一覧です。英単語・日本語で検索できます。</li>
     <li><strong>使い方</strong>：このページです。</li>
   </ul>` : `
   <ul>
     <li><strong>PastanTest</strong>：単語帳を選び、範囲を選んでテストや練習をします。</li>
-    <li><strong>学習データ</strong>：自分の点数・バツ数・フラッシュカードの記録・カレンダー・グラフを見ます。数字の横の <span class="help-mark">?</span> をタップすると説明が出ます。</li>
+    <li><strong>学習データ</strong>：自分の点数・合格回数・バツ数・フラッシュカードの記録・履歴・カレンダー・グラフを見ます。数字の横の <span class="help-mark">?</span> をタップすると説明が出ます。</li>
     <li><strong>マイページ</strong>：名前とIDの変更、メモの一覧、チュートリアルです。</li>
   </ul>`}
 
@@ -2842,9 +3112,10 @@ function manualHtml(audience) {
   <h3 id="m-columns">生徒一覧の列と記号</h3>
   <table class="manual-table">
     <tr><th>列</th><th>意味</th></tr>
-    <tr><td>T1、P1 …</td><td>範囲ごとの本番の点数（今正解になっている語数／全語数）。下に 🏆合格回数 と ◯周目 が出ます。</td></tr>
-    <tr><td>合計</td><td>この単語帳で今正解になっている語数と割合。「前回比」は、最後に勉強した日とその前の勉強日との差です。</td></tr>
-    <tr><td>今日</td><td>今日、この単語帳のテスト（本番・練習とも）で答えた問題の数。</td></tr>
+    <tr><td>T1、P1 …</td><td>セクションごとの、直近の本番テストの点数（全問を通しで解いた回の正解数／全問数）。下の「最高」はこれまでの最高点、「前の数え方」はまだ新しい決まりの本番を解いていないセクション。その下に 🏆合格回数（🔀ランダム・📋順番通りの内訳）と ◯周目 が出ます。</td></tr>
+    <tr><td>合計</td><td>この単語帳で、直近の本番テストで正解した語数と割合。「前回比」は、最後に勉強した日とその前の勉強日との差です。</td></tr>
+    <tr><td>🏆 合格</td><td>全セクションの合格回数の合計と、その内訳（🔀ランダム・📋順番通り・記録前）。「📋満点」は、2周目以降に順番通りで満点を取ったが合格に数えなかった回数。見出しをタップすると「ランダムでの合格が多い順」にも並べ替えられます。</td></tr>
+    <tr><td>今日</td><td>今日、この単語帳のテスト（本番・練習とも）で答えた問題の数と、その内訳（🔀ランダム・📋順番通り）。</td></tr>
     <tr><td>これまでのバツ ⭐</td><td>1回でも間違えたことがある単語の数。減りません。</td></tr>
     <tr><td>残りのバツ ⭐</td><td>間違えた単語のうち、練習でまだ正解できていない単語の数。練習で減ります。</td></tr>
     <tr><td>これまでのマグレ 🔺</td><td>「マグレの正解」と申告したことがある単語の数。</td></tr>
@@ -2858,27 +3129,40 @@ function manualHtml(audience) {
 
   <h3 id="m-pass">合格と周回</h3>
   <ul>
-    <li>本番（通常テスト）で、その範囲を<strong>全問正解すると合格</strong>です。300語の範囲なら300点満点が合格です。</li>
+    <li><strong>本番テスト</strong>は、毎回そのセクションの<strong>全問を最初から最後まで</strong>解きます（300語のセクションなら300問）。1回目に正解した単語も、2回目にまた出ます。</li>
+    <li><strong>1回のテストで全問正解すると合格</strong>です。1問でも間違えたら、その回は合格になりません。次の本番も、また全問を最初から解きます。</li>
+    <li>点数は、その回で正解した数です。セクションの点数欄には<strong>直近の回の点数</strong>を大きく、<strong>これまでの最高点</strong>を小さく出します。</li>
     <li>合格すると 🏆 が付き、横の数字が<strong>合格した回数</strong>です（🏆2＝2回合格）。</li>
-    <li>合格したあとにもう一度テストを始めると<strong>2周目</strong>になります。点数は300点のまま始まり、間違えるたびに1点ずつ下がります。間違えた単語を本番でもう一度正解すると点数が戻り、300点に戻ったら合格回数が1つ増えます。</li>
-    <li>2周目以降は、点数の色が<strong>薄紫</strong>になり、「◯周目」と出ます。点数が下がっても 🏆 と合格回数は残ります。</li>
-    <li>改修（2026年10月）の前にすでに全問正解だった範囲は、🏆1 から数え始めます。</li>
+    <li>まだ一度も合格していないときの本番が<strong>1周目</strong>、1回合格したあとの本番が<strong>2周目</strong>、2回合格したあとが3周目です。</li>
+    <li><strong>2周目以降は、🔀ランダムで全問正解したときだけ合格に数えます</strong>（次の「ランダムと順番通り」）。</li>
+    <li>点数の色は、直近の回が何周目だったかで変わります。1周目は 赤（50%未満）→ 黄（50〜79%）→ 薄緑（80%以上）→ 緑（満点）、2周目以降は薄紫です。</li>
+    <li>本番を途中でやめても、「本番の続きから」で同じ回の続きを解けます（日をまたいでもかまいません）。続きをやらずに本番を始め直すと、途中の回は点数が付かずに履歴に残ります。</li>
+    <li>2026年10月22日より前は、「1回目に間違えた単語だけを解き直し、全部が一度は正解になったら合格」という決まりでした。そのころの 🏆 はそのまま残っています。新しい決まりの本番をまだ解いていないセクションは、点数の横に「前の数え方」と出ます。</li>
+  </ul>
+
+  <h3 id="m-order">ランダムと順番通り</h3>
+  <ul>
+    <li>テストを始める画面で、🔀 ランダム（単語がばらばらの順で出る）と 📋 順番通り（No.の順に出る）を選べます。アプリを開くたびに 🔀 ランダムに戻ります。</li>
+    <li><strong>1周目</strong>は、どちらで全問正解しても合格です。</li>
+    <li><strong>2周目以降</strong>は、🔀ランダムで全問正解したときだけ合格に数えます。📋順番通りで満点を取った回は「📋満点」として記録しますが、🏆は増えません。</li>
+    <li>2周目以降のセクションで 📋順番通りを選ぶと、赤い帯と確認の画面で「${ORDER_WARN_TEXT}」と知らせます。</li>
+    <li>答えた問題はすべて 🔀／📋 に分けて数えています。合格の内訳、今日解いた数の内訳、履歴で確かめられます。</li>
   </ul>
 
   <h3 id="m-modes">本番と練習</h3>
   <ul>
-    <li><strong>本番＝「テスト開始（全問）」</strong>だけです。点数と合格回数が動くのはこのモードだけです。</li>
-    <li><strong>練習＝「バツのみ復習」「まぐれ正解のみ復習」「バツ＋まぐれ合同復習」「フラッシュカード」</strong>です。練習で正解しても間違えても、本番の点数は変わりません。練習の結果は、バツ数・マグレ数・フラッシュカードの記録として残ります。</li>
+    <li><strong>本番＝「▶ 本番テスト」</strong>だけです。毎回全問を通しで解きます。点数と合格回数が動くのはこのモードだけです。</li>
+    <li><strong>練習＝「バツ練習」「マグレ練習」「バツ＋マグレ練習」「フラッシュカード」</strong>です。間違えた単語・マグレだった単語だけが出ます。練習で正解しても間違えても、本番の点数と合格は変わりません。練習の結果は、バツ数・マグレ数・フラッシュカードの記録として残ります。</li>
     <li>練習で間違えた単語は「これまでのバツ」「残りのバツ」に数えます。</li>
   </ul>
 
   <h3 id="m-wrong">バツ数・マグレ数の数え方</h3>
   <ul>
     <li><strong>これまでのバツ</strong>：1回でも間違えたことがある単語の数です。本番でも練習でも、間違えれば数えます。克服しても減りません。</li>
-    <li><strong>残りのバツ</strong>：間違えた単語のうち、そのあと練習（バツのみ復習・合同復習）でまだ正解できていない単語の数です。練習で正解すると減ります。本番でまた間違えると増えます。本番で正解しただけでは減りません（本番では間違えた単語がもう一度出るので、必ず一度は正解するためです）。</li>
+    <li><strong>残りのバツ</strong>：間違えた単語のうち、そのあと練習（バツ練習・バツ＋マグレ練習）でまだ正解できていない単語の数です。練習で正解すると減ります。本番や練習でまた間違えると増えます。本番で正解しただけでは減りません。</li>
     <li><strong>これまでのマグレ</strong>：正解したときに「マグレの正解」を選んだことがある単語の数です。</li>
     <li><strong>残りのマグレ</strong>：最後の正解が「マグレ」だった単語の数です。本番でも練習でも、次に「確信して正解」を選ぶと減ります。間違えると、マグレではなくバツになります。</li>
-    <li>例：ある範囲で40語を間違え、その後本番で300点を取って合格。バツのみ復習で32語は正解できたが8語はまだ間違える → これまでのバツ40、残りのバツ8。</li>
+    <li>例：あるセクションの本番で40語を間違えた。バツ練習で32語は正解できたが、8語はまだ間違える → これまでのバツ40、残りのバツ8。</li>
   </ul>
 
   <h3 id="m-fc">フラッシュカード</h3>
@@ -2887,6 +3171,14 @@ function manualHtml(audience) {
     <li>記録するもの：やった回数、めくった枚数、「わかる」を押した数、「わからない」を押した数、最後にやった日。途中でやめても、そこまでの分は残ります。</li>
     <li><strong>🃏 わかった語数</strong>：最後に「わかる」を押した単語の数です。「わからない」を押すと外れます。</li>
     <li>「わからない語のみ復習」には、フラッシュカードで「わからない」を押した単語と、残りのバツの単語が出ます。</li>
+  </ul>
+
+  <h3 id="m-history">履歴</h3>
+  <ul>
+    <li>テストやフラッシュカードを1回やるごとに、1行ずつ記録します。新しい順に、最大300回ぶんです（2026年10月22日から）。</li>
+    <li>出る内容：日時、単語帳とセクション、本番か練習か、何周目か、🔀ランダムか📋順番通りか、点数（本番）または正解数（練習）、最後まで解いたか・途中でやめたか、続きから解いた回数。</li>
+    <li>「すべて／🔀 ランダム／📋 順番通り」で絞り込めます。</li>
+    <li>「🏆 合格」は合格した回、「満点（順番通りのため合格に数えない）」は2周目以降に順番通りで満点を取った回です。</li>
   </ul>
 
   ${T(`
@@ -2911,8 +3203,8 @@ function manualHtml(audience) {
   <h3 id="m-graph">カレンダーとグラフ</h3>
   <ul>
     <li><strong>カレンダー</strong>：色の付いた日は勉強した日です。数字は、その日にテストで答えた数。🃏の数字は、その日にフラッシュカードで「わかる」を押した数です。改修（2026年10月）より前の日は、その日の習得語数が出ます。</li>
-    <li><strong>グラフ</strong>：ピンクの線は全単語帳の習得語数（本番で今正解になっている語数）です。薄紫の線は、それまでに到達した最高の習得語数で、減りません。2本の差が、一度覚えたあとに忘れた（間違えて落ちた）分です。点線は残りのバツの数で、2026年10月21日から記録しています（それより前の日は出ません）。</li>
-    <li>習得語数が減るのは、本番で一度正解した単語をまた間違えたときと、学習データをリセットしたときです。改修より前は、合格した範囲でテストをもう一度始めるとその範囲の点数が0に戻っていたため、大きく減ることがありました。今は0に戻りません。</li>
+    <li><strong>グラフ</strong>：ピンクの線は全単語帳の習得語数（直近の本番テストで正解した語数）です。薄紫の線は、それまでに到達した最高の習得語数で、減りません。2本の差が、一度覚えたあとに忘れた分です。点線は残りのバツの数で、2026年10月21日から記録しています（それより前の日は出ません）。</li>
+    <li>習得語数は、本番テストを最後まで解いたときに、その回の結果で書き換わります。前の回で正解した単語を今回間違えると減ります。学習データをリセットしたときも減ります。</li>
   </ul>
 </div>`;
 }
@@ -2929,6 +3221,7 @@ document.getElementById('btn-manual-open').addEventListener('click', () => openM
 function startFlashcard(mode) {
   fc.mode    = mode;
   fc.section = quiz.section;
+  fc.order   = quiz.orderMode;
   fc.unknownNos = new Set();
   fc.tab     = 'word';
   fc.explainOpen = false;
@@ -2941,6 +3234,7 @@ function startFlashcard(mode) {
     : shuffle(arr);
 
   fc.sessionCounted = false;
+  fc.logged = false;
   let raw;
   if (mode === 'review')       raw = allWords.filter(w => isRemainWrong(rec[w.no]) || rec[w.no]?.fcUnknown === true);
   else if (mode === 'lucky')   raw = allWords.filter(w => rec[w.no]?.lucky === true);
@@ -3074,8 +3368,16 @@ function fcMark(known) {
   renderFCCard();
 }
 
+// フラッシュカードを終えた／やめたときに履歴へ1行残す
+function logFlashcard(status) {
+  if (!fc.section || fc.index === 0 || fc.logged) return;
+  fc.logged = true;
+  pushHistory({ book: currentBook.id, sec: fc.section.id, mode: 'flashcard', round: null, order: fc.order || 'random',
+    answered: fc.index, correct: fc.index - fc.unknownNos.size, total: fc.total, status, resumed: 0 });
+}
 function showFCComplete() {
   lastCompleteType = 'flashcard';
+  logFlashcard('done');
   saveRecords();
   const unknownCount = fc.unknownNos.size;
   const knownCount   = fc.total - unknownCount;
@@ -3113,6 +3415,8 @@ function fcRetryUnknown() {
   fc.tab         = 'word';
   fc.explainOpen = false;
   fc.mode        = 'retry';
+  fc.logged      = false;
+  fc.sessionCounted = false;
 
   showScreen('screen-flashcard');
   renderFCCard();
@@ -3122,10 +3426,18 @@ function fcRetryUnknown() {
 document.getElementById('order-toggle').addEventListener('click', (e) => {
   const btn = e.target.closest('.order-btn');
   if (!btn) return;
-  document.querySelectorAll('.order-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  quiz.orderMode = btn.dataset.order;
+  setOrderMode(btn.dataset.order);
 });
+document.getElementById('btn-warn-random').addEventListener('click', () => {
+  closeOrderWarnModal();
+  setOrderMode('random');
+  startQuiz('normal', { confirmed: true });
+});
+document.getElementById('btn-warn-seq').addEventListener('click', () => {
+  closeOrderWarnModal();
+  startQuiz('normal', { confirmed: true });
+});
+document.getElementById('btn-warn-close').addEventListener('click', closeOrderWarnModal);
 
 // ===== Flashcard Events =====
 document.getElementById('btn-start-flashcard').addEventListener('click', () => startFlashcard('normal'));
@@ -3153,20 +3465,25 @@ document.getElementById('fc-btn-play').addEventListener('click', () => {
 document.getElementById('fc-btn-unknown').addEventListener('click', () => fcMark(false));
 document.getElementById('fc-btn-known').addEventListener('click',   () => fcMark(true));
 
-document.getElementById('btn-back-fc').addEventListener('click', () => openMode(quiz.section));
+document.getElementById('btn-back-fc').addEventListener('click', () => {
+  logFlashcard('paused');
+  saveState();
+  openMode(quiz.section);
+});
 
 document.getElementById('btn-review-all').addEventListener('click', () => {
   if (!currentBook) return;
   const rec = currentRecords();
   const allWrong = currentBook.words().filter(w => w.japanese && isRemainWrong(rec[w.no]));
   if (allWrong.length === 0) { alert('残りのバツはありません。'); return; }
-  quiz.section = { id: '__all__', label: '全範囲バツ復習', range: '全セクション' };
-  quiz.mode = 'review'; quiz.sessionCorrect = 0; quiz.sessionWrong = 0; quiz.answered = false;
+  quiz.section = { id: '__all__', label: '全セクションのバツ練習', range: '全セクション' };
+  quiz.mode = 'review'; quiz.order = 'random'; quiz.run = null;
+  quiz.sessionCorrect = 0; quiz.sessionWrong = 0; quiz.answered = false;
   quiz.allWords = currentBook.words().filter(w => w.japanese);
   quiz.pool = shuffle(allWrong);
   quiz.totalPool = quiz.pool.length;
-  document.getElementById('quiz-section-label').textContent = '全範囲';
-  document.getElementById('quiz-mode-label').textContent = '⭐ バツ復習';
+  document.getElementById('quiz-section-label').textContent = '全セクション';
+  setQuizModeLabel();
   showScreen('screen-quiz');
   nextQuestion();
 });

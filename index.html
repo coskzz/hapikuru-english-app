@@ -83,7 +83,7 @@
 
   <div class="home-footer">
     <button id="btn-review-all" class="btn btn-review">
-      ⭐ バツのみ復習モード
+      ⭐ 全セクションのバツ練習（点数に入りません）
     </button>
   </div>
 </div>
@@ -103,15 +103,19 @@
       <button class="order-btn active" data-order="random">🔀 ランダム</button>
       <button class="order-btn" data-order="sequential">📋 順番通り</button>
     </div>
+    <div class="order-warn-banner hidden" id="order-warn-banner">
+      ⚠️ 2周目以降の合格扱いになるには、ランダムでクリアする必要があります。順番通りで解いた分は、合格回数（🏆）に数えません。
+    </div>
   </div>
 
   <div class="mode-buttons">
-    <div class="mode-section-label">── 4択テスト ──</div>
-    <button class="btn btn-resume btn-large hidden" id="btn-start-resume">⏸ 続きから再開</button>
-    <button class="btn btn-primary btn-large" id="btn-start-normal">▶ テスト開始（全問）</button>
-    <button class="btn btn-review btn-large" id="btn-start-review">⭐ バツのみ復習</button>
-    <button class="btn btn-lucky-mode btn-large" id="btn-start-lucky">🔺 まぐれ正解のみ復習</button>
-    <button class="btn btn-combined-mode btn-large" id="btn-start-review-combined">⭐🔺 バツ＋まぐれ合同復習</button>
+    <button class="btn btn-resume btn-large hidden" id="btn-start-resume">⏸ 続きから</button>
+    <div class="mode-section-label">── 本番（全問を通しで解く・1回で全問正解すると合格）──</div>
+    <button class="btn btn-primary btn-large" id="btn-start-normal">▶ 本番テスト（全問を通しで）</button>
+    <div class="mode-section-label">── 練習（間違えた単語だけ・点数と合格には入りません）──</div>
+    <button class="btn btn-review btn-large" id="btn-start-review">⭐ バツ練習</button>
+    <button class="btn btn-lucky-mode btn-large" id="btn-start-lucky">🔺 マグレ練習</button>
+    <button class="btn btn-combined-mode btn-large" id="btn-start-review-combined">⭐🔺 バツ＋マグレ練習</button>
     <div class="mode-section-label">── フラッシュカード ──</div>
     <button class="btn btn-flashcard btn-large" id="btn-start-flashcard">🃏 フラッシュカードモード</button>
     <button class="btn btn-flashcard-review btn-large" id="btn-start-flashcard-review">🃏⭐ わからない語のみ復習</button>
@@ -372,6 +376,39 @@
   <div id="admin-panel-manual" class="hidden"></div>
 </div>
 
+<!-- 順番通りの確認（2周目以降の本番） -->
+<div id="order-warn-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title warn-title">⚠️ 順番通りでは合格に数えません</h3>
+      <button class="modal-close-btn" id="btn-warn-close">✕</button>
+    </div>
+    <p class="warn-text">2周目以降の合格扱いになるには、ランダムでクリアする必要があります。<br>順番通りで解いた分は、合格回数（🏆）に数えません。</p>
+    <div class="warn-buttons">
+      <button class="btn btn-primary" id="btn-warn-random">🔀 ランダムに切り替えて始める</button>
+      <button class="btn btn-secondary" id="btn-warn-seq">📋 順番通りのまま始める</button>
+    </div>
+  </div>
+</div>
+
+<!-- 1回だけのお知らせ（合格の決まりの変更） -->
+<div id="notice-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">📢 本番テストの決まりが変わりました</h3>
+    </div>
+    <div class="notice-body">
+      <p><strong>本番テストは、毎回そのセクションの全問を最初から最後まで解きます。</strong><br>1回のテストで全問正解すると合格（🏆）です。</p>
+      <p>間違えた単語は「⭐ バツ練習」で練習しましょう。練習は点数と合格には入りません。</p>
+      <p><strong>2周目以降は、🔀 ランダムで全問正解したときだけ合格に数えます。</strong></p>
+      <p class="notice-small">これまでに取った 🏆 はそのまま残ります。</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-small" id="btn-notice-ok">わかった</button>
+    </div>
+  </div>
+</div>
+
 <!-- 使い方モーダル（生徒用） -->
 <div id="manual-modal" class="modal-overlay hidden">
   <div class="modal-box modal-box-wide">
@@ -447,6 +484,7 @@
       <button class="detail-tab-btn active" id="detail-tab-calendar" data-tab="calendar">📅 カレンダー</button>
       <button class="detail-tab-btn" id="detail-tab-chart" data-tab="chart">📈 グラフ</button>
       <button class="detail-tab-btn" id="detail-tab-progress" data-tab="progress">📚 単語帳ごと</button>
+      <button class="detail-tab-btn" id="detail-tab-history" data-tab="history">📝 履歴</button>
     </div>
     <div id="detail-body" class="detail-body"></div>
   </div>
@@ -497,6 +535,10 @@
   <!-- 範囲ごと -->
   <div class="mypage-section-title">🏆 範囲ごとの点数</div>
   <div id="stats-section-table"></div>
+
+  <!-- 履歴 -->
+  <div class="mypage-section-title">📝 履歴</div>
+  <div id="stats-history" class="stats-history"></div>
 
   <!-- カレンダー -->
   <div class="mypage-section-title">📆 カレンダー</div>

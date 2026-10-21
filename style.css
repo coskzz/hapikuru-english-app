@@ -1392,3 +1392,45 @@ body.has-tab-bar .chara-widget { bottom: 76px; }
   margin: 6px 0 14px;
 }
 .edit-id-desc strong { color: #D63F70; }
+
+/* ===== 2026-10-22 通しの本番・出題順・履歴 ===== */
+.score-sub { display: inline-block; font-size: .62rem; color: #999; font-weight: normal; line-height: 1.2; }
+.pass-detail { font-size: .6rem; color: #8a7000; margin-left: 1px; }
+.seqfull-badge { display: inline-block; font-size: .6rem; color: #888; margin-left: 3px; }
+.col-pass { width: 72px; font-size: .82rem; line-height: 1.35; }
+.card-best { font-size: .7rem !important; color: #999 !important; margin-top: 2px !important; }
+.mode-best { font-size: .78rem; color: #999; margin-left: 6px; }
+.order-warn-banner {
+  margin-top: 10px; padding: 10px 12px; border: 2px solid #E05555; border-radius: 10px;
+  background: #FFF1F1; color: #B03030; font-size: .82rem; font-weight: bold; line-height: 1.5;
+}
+.quiz-warn {
+  display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 6px;
+  background: #FFF1F1; border: 1.5px solid #E05555; color: #B03030; font-size: .72rem; font-weight: bold;
+}
+.complete-warn { display: inline-block; margin-top: 6px; color: #B03030; font-size: .85rem; line-height: 1.5; }
+.warn-title { color: #B03030; }
+.warn-text { font-size: .9rem; line-height: 1.7; color: #444; margin-bottom: 16px; }
+.warn-buttons { display: flex; flex-direction: column; gap: 10px; }
+.warn-buttons .btn { width: 100%; }
+.notice-body p { font-size: .9rem; line-height: 1.7; color: #444; margin-bottom: 10px; }
+.notice-small { font-size: .8rem !important; color: #888 !important; }
+.mode-section-label { white-space: normal; text-align: center; line-height: 1.4; }
+
+/* 履歴 */
+.history-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.history-list { display: flex; flex-direction: column; gap: 6px; }
+.stats-history .history-list { max-height: 420px; overflow-y: auto; }
+.history-item { border: 1px solid #f0f0f0; border-left: 4px solid #ddd; border-radius: 8px; padding: 7px 10px; font-size: .8rem; background: #fff; }
+.history-item.h-normal { border-left-color: #FF6B9D; }
+.history-item.h-pass { border-left-color: #1a7a40; background: #F4FCF7; }
+.history-item.h-seqfull { border-left-color: #B03030; background: #FFF6F6; }
+.history-item.h-quit { border-left-color: #ccc; background: #fafafa; color: #777; }
+.h-top { display: flex; gap: 8px; color: #999; font-size: .72rem; }
+.h-what { color: #666; font-weight: bold; }
+.h-mid { margin-top: 2px; color: #333; }
+.h-sub { color: #999; font-size: .72rem; }
+.h-status { margin-top: 2px; font-size: .72rem; color: #888; }
+.col-sec .cell-badges { white-space: normal; min-width: 64px; }
+.col-sec .pass-detail, .col-sec .seqfull-badge { display: block; margin: 0; }
+
