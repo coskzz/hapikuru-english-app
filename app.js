@@ -2127,12 +2127,16 @@ function renderLineChart(dailyLog, container) {
   const remainPoints = hasRemain
     ? entries.map(([, v], i) => v.remainWrong === undefined ? null : `${xs(i).toFixed(1)},${ys(v.remainWrong).toFixed(1)}`).filter(Boolean).join(' ')
     : '';
+  // これまでの最高（その日までに到達した最高の習得語数。減らない）
+  let runMax = 0;
+  const maxPoints = entries.map(([, v], i) => { runMax = Math.max(runMax, v.mastered || 0); return `${xs(i).toFixed(1)},${ys(runMax).toFixed(1)}`; }).join(' ');
 
   const yTicks = [0, Math.round(maxY / 2), maxY];
   const xIdxs = [...new Set([0, Math.floor(n / 2), n - 1])];
 
   const svg = `<svg viewBox="0 0 ${W} ${H}" class="line-chart-svg" xmlns="http://www.w3.org/2000/svg">
     <path d="${areaPath}" class="chart-area"/>
+    <polyline points="${maxPoints}" class="chart-line-max" fill="none"/>
     <polyline points="${linePoints}" class="chart-line" fill="none"/>
     ${entries.map(([, v], i) => `<circle cx="${xs(i).toFixed(1)}" cy="${ys(v.mastered || 0).toFixed(1)}" r="3" class="chart-dot"/>`).join('')}
     ${hasRemain ? `<polyline points="${remainPoints}" class="chart-line-remain" fill="none"/>` : ''}
@@ -2149,7 +2153,8 @@ function renderLineChart(dailyLog, container) {
     <p class="chart-title">習得語数の推移（全単語帳合計）</p>${svg}
     <div class="chart-legend" onclick="showHelp('chart', this)">
       <span class="legend-main">━ 習得語数（本番で今正解になっている語数）</span>
-      ${hasRemain ? '<span class="legend-remain">┅ 残りのバツ</span>' : ''}
+      <span class="legend-max">━ これまでの最高</span>
+      ${hasRemain ? '<span class="legend-remain">┅ 残りのバツ</span>' : '<span class="legend-remain legend-nodata">┅ 残りのバツ（10/21から記録）</span>'}
       <span class="help-mark">?</span>
     </div>
   </div>`;
@@ -2727,7 +2732,7 @@ const HELP = {
   fcKnown:     { title: '🃏 わかった語数', text: 'フラッシュカードで最後に「わかる」を押した単語の数です。「わからない」を押すと外れます。', anchor: 'm-fc' },
   updated:     { title: '最終更新', text: 'その生徒の記録が最後に保存された日です。', anchor: 'm-columns' },
   calendar:    { title: 'カレンダー', text: '色の付いた日は勉強した日です。数字は、その日にテストで答えた数。🃏の数字は、その日にフラッシュカードで「わかる」を押した数です。改修より前の日は、その日の習得語数が出ます。', anchor: 'm-graph' },
-  chart:       { title: 'グラフ', text: 'ピンクの線は、全単語帳の習得語数（本番で今正解になっている語数）です。点線は残りのバツの数です。', anchor: 'm-graph' },
+  chart:       { title: 'グラフ', text: 'ピンクの線は、全単語帳の習得語数（本番で今正解になっている語数）です。薄紫の線は、それまでに到達した最高の習得語数で、減りません。2本の差が、一度覚えたあとに忘れた（間違えて落ちた）分です。点線は残りのバツの数で、2026年10月21日から記録しています。', anchor: 'm-graph' },
 };
 
 let helpPopEl = null;
@@ -2905,7 +2910,7 @@ function manualHtml(audience) {
   <h3 id="m-graph">カレンダーとグラフ</h3>
   <ul>
     <li><strong>カレンダー</strong>：色の付いた日は勉強した日です。数字は、その日にテストで答えた数。🃏の数字は、その日にフラッシュカードで「わかる」を押した数です。改修（2026年10月）より前の日は、その日の習得語数が出ます。</li>
-    <li><strong>グラフ</strong>：ピンクの線は全単語帳の習得語数（本番で今正解になっている語数）、点線は残りのバツの数です。</li>
+    <li><strong>グラフ</strong>：ピンクの線は全単語帳の習得語数（本番で今正解になっている語数）です。薄紫の線は、それまでに到達した最高の習得語数で、減りません。2本の差が、一度覚えたあとに忘れた（間違えて落ちた）分です。点線は残りのバツの数で、2026年10月21日から記録しています（それより前の日は出ません）。</li>
     <li>習得語数が減るのは、本番で一度正解した単語をまた間違えたときと、学習データをリセットしたときです。改修より前は、合格した範囲でテストをもう一度始めるとその範囲の点数が0に戻っていたため、大きく減ることがありました。今は0に戻りません。</li>
   </ul>
 </div>`;
