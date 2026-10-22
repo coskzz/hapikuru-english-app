@@ -348,6 +348,7 @@ const SCREEN_TAB = {
 };
 
 function showScreen(id) {
+  if (typeof hideChartTip === 'function') hideChartTip();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
@@ -2161,6 +2162,7 @@ function openUserDetail(uid, userType) {
 }
 
 function renderDetailTab(tab) {
+  hideChartTip();
   const user = getDetailUser();
   if (!user) return;
   detailTab = tab;
@@ -2366,7 +2368,7 @@ function renderLineChart(dailyLog, container) {
     return;
   }
   if (entries.length === 1) {
-    entries = [[entries[0][0], { mastered: 0 }], ...entries];
+    entries = [[entries[0][0], { mastered: 0, _start: true }], ...entries];
   }
 
   const W = 320, H = 180;
@@ -2396,7 +2398,8 @@ function renderLineChart(dailyLog, container) {
     : '';
   // これまでの最高（その日までに到達した最高の習得語数。減らない）
   let runMax = 0;
-  const maxPoints = entries.map(([, v], i) => { runMax = Math.max(runMax, v.mastered || 0); return `${xs(i).toFixed(1)},${ys(runMax).toFixed(1)}`; }).join(' ');
+  const runMaxes = entries.map(([, v]) => (runMax = Math.max(runMax, v.mastered || 0)));
+  const maxPoints = runMaxes.map((m, i) => `${xs(i).toFixed(1)},${ys(m).toFixed(1)}`).join(' ');
 
   const yTicks = [0, Math.round(maxY / 2), maxY];
   const xIdxs = [...new Set([0, Math.floor(n / 2), n - 1])];
@@ -2414,18 +2417,118 @@ function renderLineChart(dailyLog, container) {
       <text x="${PL - 6}" y="${(ys(v) + 4).toFixed(1)}" class="chart-label" text-anchor="end">${v}</text>
     `).join('')}
     ${xIdxs.map(i => `<text x="${xs(i).toFixed(1)}" y="${H - PB + 14}" class="chart-label" text-anchor="middle">${entries[i][0].slice(5)}</text>`).join('')}
+    <line class="chart-guide hidden-guide" x1="0" y1="${PT}" x2="0" y2="${H - PB}"/>
+    <circle class="chart-dot-active hidden-guide" cx="0" cy="0" r="5"/>
+    <rect class="chart-hit" x="${PL}" y="0" width="${W - PL - PR}" height="${H - PB + 4}" fill="transparent"/>
   </svg>`;
 
   container.innerHTML = `<div class="chart-wrap">
     <p class="chart-title">習得語数の推移（全単語帳合計）</p>${svg}
     <div class="chart-legend" onclick="showHelp('chart', this)">
-      <span class="legend-main">━ 習得語数（本番で今正解になっている語数）</span>
+      <span class="legend-main">━ 習得語数（直近の本番で正解した語数）</span>
       <span class="legend-max">━ これまでの最高</span>
       ${hasRemain ? '<span class="legend-remain">┅ 残りのバツ</span>' : '<span class="legend-remain legend-nodata">┅ 残りのバツ（10/21から記録）</span>'}
       <span class="help-mark">?</span>
     </div>
   </div>`;
+  setupChartTip(container.querySelector('svg'), entries, runMaxes, { W, PL, PR, xs, ys });
 }
+
+// ===== グラフの点にカーソルを乗せる／タップすると、その日の数字を出す =====
+let chartTipEl = null;
+function hideChartTip() {
+  if (chartTipEl) { chartTipEl.remove(); chartTipEl = null; }
+  document.querySelectorAll('.line-chart-svg .hidden-guide-on').forEach(el => el.classList.remove('hidden-guide-on'));
+}
+function fmtNum(n) { return Number(n || 0).toLocaleString('ja-JP'); }
+function fmtDateJa(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  const dow = ['日', '月', '火', '水', '木', '金', '土'][new Date(y, m - 1, d).getDay()];
+  return `${y}/${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}（${dow}）`;
+}
+function chartTipHtml(entries, runMaxes, i) {
+  const [day, v] = entries[i];
+  if (v._start) return `<div class="ct-date">${fmtDateJa(day)}</div><div class="ct-note">記録の始まり（0語）</div>`;
+  const prev = i > 0 && !entries[i - 1][1]._start ? entries[i - 1][1].mastered : null;
+  const diff = prev != null ? (v.mastered || 0) - prev : null;
+  const rows = [];
+  rows.push(`<div class="ct-row ct-main">習得語数 <b>${fmtNum(v.mastered)}語</b>${diff != null ? ` ${diffLabel({ diff })}` : ''}</div>`);
+  if (runMaxes[i] > (v.mastered || 0)) rows.push(`<div class="ct-row ct-max">これまでの最高 ${fmtNum(runMaxes[i])}語</div>`);
+  if (v.remainWrong !== undefined) rows.push(`<div class="ct-row ct-remain">残りのバツ ${fmtNum(v.remainWrong)}語</div>`);
+  if (v.answered) {
+    const detail = (v.answeredRandom || v.answeredSeq) ? `（🔀${fmtNum(v.answeredRandom)}・📋${fmtNum(v.answeredSeq)}）` : '';
+    rows.push(`<div class="ct-row">この日に解いた数 ${fmtNum(v.answered)}問${detail}</div>`);
+  }
+  if (v.fcCards) rows.push(`<div class="ct-row">🃏 フラッシュカード ${fmtNum(v.fcCards)}枚（わかる ${fmtNum(v.fcKnown)}）</div>`);
+  const books = BOOKS.filter(b => (v.books?.[b.id]?.mastered || 0) > 0)
+    .map(b => `${b.name} ${fmtNum(v.books[b.id].mastered)}語`);
+  if (books.length) rows.push(`<div class="ct-books">${books.join('<br>')}</div>`);
+  if (!v.answered && !v.books && v.remainWrong === undefined) rows.push('<div class="ct-note">この日は、習得語数だけを記録していた時期です</div>');
+  return `<div class="ct-date">${fmtDateJa(day)}</div>${rows.join('')}`;
+}
+function setupChartTip(svg, entries, runMaxes, g) {
+  if (!svg) return;
+  const n = entries.length;
+  const guide = svg.querySelector('.chart-guide');
+  const dot   = svg.querySelector('.chart-dot-active');
+  const hit   = svg.querySelector('.chart-hit');
+  const indexAt = clientX => {
+    const r = svg.getBoundingClientRect();
+    const x = (clientX - r.left) * (g.W / r.width);
+    const t = (x - g.PL) / (g.W - g.PL - g.PR);
+    return Math.max(0, Math.min(n - 1, Math.round(t * (n - 1))));
+  };
+  const show = (clientX, pinned) => {
+    const i = indexAt(clientX);
+    const [, v] = entries[i];
+    const cx = g.xs(i), cy = g.ys(v.mastered || 0);
+    guide.setAttribute('x1', cx); guide.setAttribute('x2', cx);
+    dot.setAttribute('cx', cx); dot.setAttribute('cy', cy);
+    guide.classList.add('hidden-guide-on'); dot.classList.add('hidden-guide-on');
+    if (!chartTipEl) {
+      chartTipEl = document.createElement('div');
+      chartTipEl.className = 'chart-tip';
+      document.body.appendChild(chartTipEl);
+    }
+    chartTipEl.dataset.pinned = pinned ? '1' : (chartTipEl.dataset.pinned || '');
+    if (chartTipEl.dataset.index !== String(i)) {
+      chartTipEl.innerHTML = chartTipHtml(entries, runMaxes, i);
+      chartTipEl.dataset.index = String(i);
+    }
+    const dr = dot.getBoundingClientRect();
+    const w = chartTipEl.offsetWidth, h = chartTipEl.offsetHeight;
+    let left, top;
+    if (window.innerWidth < 600) {
+      // スマホ：グラフの線に重ならないよう、グラフの下（入らなければ上）に出す
+      const sr = svg.getBoundingClientRect();
+      left = Math.max(8, Math.min(dr.left - w / 2, window.innerWidth - w - 8));
+      top = sr.bottom + 6;
+      if (top + h > window.innerHeight - 8) top = Math.max(8, sr.top - h - 6);
+    } else {
+      // PC：点の右（入らなければ左）に出す
+      left = dr.left + dr.width / 2 + 12;
+      if (left + w > window.innerWidth - 8) left = dr.left - w - 12;
+      left = Math.max(8, left);
+      top = Math.max(8, Math.min(dr.top - h / 2, window.innerHeight - h - 8));
+    }
+    chartTipEl.style.left = left + 'px';
+    chartTipEl.style.top  = top + 'px';
+  };
+  hit.addEventListener('pointermove', e => {
+    if (e.pointerType === 'mouse') show(e.clientX, false);
+    else if (e.buttons) show(e.clientX, true);          // 指でなぞると、なぞった日に切り替わる
+  });
+  hit.addEventListener('pointerdown', e => { show(e.clientX, true); });
+  hit.addEventListener('pointerleave', e => {
+    if (e.pointerType === 'mouse' && chartTipEl && chartTipEl.dataset.pinned !== '1') hideChartTip();
+  });
+}
+// グラフと数字の枠の外をタップ／クリックしたら閉じる
+document.addEventListener('pointerdown', e => {
+  if (!chartTipEl) return;
+  if (e.target.closest('.chart-hit') || chartTipEl.contains(e.target)) return;
+  hideChartTip();
+});
 
 function setupAdminSearch() {
   const searchEl = document.getElementById('admin-search');
@@ -2788,6 +2891,7 @@ document.getElementById('admin-word-section-filter').addEventListener('change', 
 
 // Student detail modal events
 document.getElementById('btn-close-detail').addEventListener('click', () => {
+  hideChartTip();
   document.getElementById('student-detail-modal').classList.add('hidden');
   currentDetailUid = null;
 });
@@ -3002,7 +3106,7 @@ const HELP = {
   legacy:      { title: '「前の数え方」とは', text: 'このセクションは、まだ新しい決まり（本番テストを毎回全問、最初から最後まで通しで解く）で本番を解き終えていません。出ている点数は、2026年10月22日より前の数え方の点数です。前の数え方では、1回目に間違えた単語だけを解き直して、全部の単語が一度は正解になった数を点数にしていました。次に本番テストを最後まで解くと、その回の点数に置き換わり、この印は消えます。', anchor: 'm-pass' },
   history:     { title: '履歴', text: 'テストやフラッシュカードを1回やるごとの記録です。日時、単語帳とセクション、本番か練習か、何周目か、🔀ランダムか📋順番通りか、点数、最後まで解いたか・途中でやめたかが出ます。新しい順に最大300回ぶん。2026年10月22日から記録しています。', anchor: 'm-history' },
   calendar:    { title: 'カレンダー', text: '色の付いた日は勉強した日です。数字は、その日にテストで答えた数。🃏の数字は、その日にフラッシュカードで「わかる」を押した数です。改修より前の日は、その日の習得語数が出ます。', anchor: 'm-graph' },
-  chart:       { title: 'グラフ', text: 'ピンクの線は、全単語帳の習得語数（直近の本番テストで正解した語数）です。薄紫の線は、それまでに到達した最高の習得語数で、減りません。2本の差が、一度覚えたあとに忘れた分です。点線は残りのバツの数で、2026年10月21日から記録しています。', anchor: 'm-graph' },
+  chart:       { title: 'グラフ', text: '点にカーソルを乗せる（スマホはタップ）と、その日の習得語数・前回比・解いた数などが出ます。ピンクの線は、全単語帳の習得語数（直近の本番テストで正解した語数）です。薄紫の線は、それまでに到達した最高の習得語数で、減りません。2本の差が、一度覚えたあとに忘れた分です。点線は残りのバツの数で、2026年10月21日から記録しています。', anchor: 'm-graph' },
 };
 
 let helpPopEl = null;
